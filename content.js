@@ -45,7 +45,10 @@ class JimengBatchUploader {
           <label>提交间隔: 
             <input type="number" class="jbu-interval" value="8" min="4" max="15"> 秒
           </label>
+          电影实拍
+  Roblox像素风格
         </div>
+
 
         <div class="jbu-character-section">
           <h3 class="jbu-section-title">角色列表 (自动提取)</h3>
@@ -75,6 +78,9 @@ class JimengBatchUploader {
       <div class="jbu-resize-handle jbu-resize-se"></div>
       <div class="jbu-resize-handle jbu-resize-e"></div>
       <div class="jbu-resize-handle jbu-resize-s"></div>
+      <div class="jbu-resize-handle jbu-resize-w"></div>
+      <div class="jbu-resize-handle jbu-resize-nw"></div>
+      <div class="jbu-resize-handle jbu-resize-sw"></div>
     `;
 
     document.body.appendChild(floatingDiv);
@@ -1076,51 +1082,71 @@ class JimengBatchUploader {
 
     // 开始上传
 
-    async startUpload() {
+        async startUpload() {
 
-      if (this.storyboards.length === 0) {
+          // 检查是否选择了“图片生成”
 
-        alert('请先添加分镜');
+          const modeElement = document.querySelector('div[class^="dimension-layout-"] div[class^="toolbar-settings-"] .lv-select-view .lv-select-view-value');
 
-        return;
+          if (!modeElement || !modeElement.textContent.includes('图片生成')) {
 
-      }
+            alert('请先在即梦输入框底部工具栏手动选择“图片生成”模式，然后再开始上传。');
 
-  
+            return;
 
-      console.log('开始批量上传，总共', this.storyboards.length, '个分镜');
+          }
 
-      
+          // const aspectElement = document.querySelector('div[class^="dimension-layout-"] div[class^="toolbar-settings-"] button.lv-btn span[class^=.button-text-"]');
+          // if (!aspectElement || !aspectElement.textContent.includes('9:16')) {
 
-      // 重置所有分镜状态
+          //   alert('请先在即梦输入框底部工具栏选择比例，确认是9:16，然后再开始上传。');
 
-      this.storyboards.forEach(storyboard => {
+          //   return;
 
-        if (storyboard.status !== 'completed') {
+          // }
+          if (this.storyboards.length === 0) {
 
-          storyboard.status = 'pending';
+            alert('请先添加分镜');
+
+            return;
+
+          }
+
+    
+
+          console.log('开始批量上传，总共', this.storyboards.length, '个分镜');
+
+          
+
+          // 重置所有分镜状态
+
+          this.storyboards.forEach(storyboard => {
+
+            if (storyboard.status !== 'completed') {
+
+              storyboard.status = 'pending';
+
+            }
+
+          });
+
+    
+
+          this.isRunning = true;
+
+          this.isPaused = false;
+
+          this.currentIndex = 0;
+
+          
+
+          this.updateButtons();
+
+          this.renderStoryboards();
+
+          await this.processNextStoryboard();
 
         }
-
-      });
-
-  
-
-      this.isRunning = true;
-
-      this.isPaused = false;
-
-      this.currentIndex = 0;
-
-      
-
-      this.updateButtons();
-
-      this.renderStoryboards();
-
-      await this.processNextStoryboard();
-
-    }
 
   
 
@@ -2274,131 +2300,239 @@ class JimengBatchUploader {
 
   
 
-      makeDraggable() {
+            makeDraggable() {
 
   
 
-        const header = this.floatingWindow.querySelector('.jbu-header');
+              const element = this.floatingWindow;
 
   
 
-        let isDragging = false;
+              const header = element.querySelector('.jbu-header');
 
   
 
-        let currentX;
+              const DRAG_HANDLE_WIDTH = 10; // 允许从左侧10px范围内拖拽
 
   
 
-        let currentY;
+      
 
   
 
-        let initialX;
+              let isDragging = false;
 
   
 
-        let initialY;
+              let initialX;
 
   
 
-    
+              let initialY;
 
   
 
-        header.addEventListener('mousedown', (e) => {
+              let offsetX; // 鼠标点击位置相对于元素左上角的偏移
 
   
 
-          // 确保不是在按钮上开始拖拽
+              let offsetY;
 
   
 
-          if (e.target.tagName === 'BUTTON') return;
+      
 
   
 
-          
+              const startDrag = (e) => {
 
   
 
-          isDragging = true;
+                // 确保不是在按钮上开始拖拽
 
   
 
-          initialX = e.clientX - this.floatingWindow.offsetLeft;
+                if (e.target.tagName === 'BUTTON' || e.target.classList.contains('jbu-resize-handle')) return;
 
   
 
-          initialY = e.clientY - this.floatingWindow.offsetTop;
+      
 
   
 
-        });
+                const rect = element.getBoundingClientRect();
 
   
 
-    
+                const clickX = e.clientX;
 
   
 
-        document.addEventListener('mousemove', (e) => {
+                const clickY = e.clientY;
 
   
 
-          if (isDragging) {
+      
 
   
 
-            e.preventDefault();
+                // 检查是否在头部区域或者左侧拖拽区域
 
   
 
-            currentX = e.clientX - initialX;
+                const isClickOnHeader = header.contains(e.target);
 
   
 
-            currentY = e.clientY - initialY;
+                const isClickOnLeftEdge = (clickX >= rect.left && clickX <= rect.left + DRAG_HANDLE_WIDTH && clickY >= rect.top && clickY <= rect.bottom);
 
   
 
-            
+      
 
   
 
-            this.floatingWindow.style.left = currentX + 'px';
+                if (isClickOnHeader || isClickOnLeftEdge) {
 
   
 
-            this.floatingWindow.style.top = currentY + 'px';
+                  isDragging = true;
 
   
 
-          }
+                  offsetX = clickX - rect.left;
 
   
 
-        });
+                  offsetY = clickY - rect.top;
 
   
 
-    
+      
 
   
 
-        document.addEventListener('mouseup', () => {
+                  // 记录初始位置，用于计算拖拽偏移
 
   
 
-          isDragging = false;
+                  initialX = e.clientX;
 
   
 
-        });
+                  initialY = e.clientY;
 
   
 
-      }
+      
+
+  
+
+                  element.style.cursor = 'grabbing';
+
+  
+
+                }
+
+  
+
+              };
+
+  
+
+      
+
+  
+
+              const drag = (e) => {
+
+  
+
+                if (isDragging) {
+
+  
+
+                  e.preventDefault();
+
+  
+
+                  const dx = e.clientX - initialX;
+
+  
+
+                  const dy = e.clientY - initialY;
+
+  
+
+      
+
+  
+
+                  element.style.left = (element.offsetLeft + dx) + 'px';
+
+  
+
+                  element.style.top = (element.offsetTop + dy) + 'px';
+
+  
+
+      
+
+  
+
+                  initialX = e.clientX;
+
+  
+
+                  initialY = e.clientY;
+
+  
+
+                }
+
+  
+
+              };
+
+  
+
+      
+
+  
+
+              const stopDrag = () => {
+
+  
+
+                isDragging = false;
+
+  
+
+                element.style.cursor = 'grab';
+
+  
+
+              };
+
+  
+
+      
+
+  
+
+              element.addEventListener('mousedown', startDrag);
+
+  
+
+              document.addEventListener('mousemove', drag);
+
+  
+
+              document.addEventListener('mouseup', stopDrag);
+
+  
+
+            }
 
   
 
@@ -2498,91 +2632,423 @@ class JimengBatchUploader {
 
   
 
-            const resize = (e) => {
+                        const resize = (e) => {
 
   
 
-              if (handle.classList.contains('jbu-resize-se')) {
+    
 
   
 
-                const width = originalWidth + (e.pageX - startX);
+                          if (handle.classList.contains('jbu-resize-se')) {
 
   
 
-                const height = originalHeight + (e.pageY - startY);
+    
 
   
 
-                if (width > minWidth) {
+                            const width = originalWidth + (e.pageX - startX);
 
   
 
-                  element.style.width = width + 'px';
+    
 
   
 
-                }
+                            const height = originalHeight + (e.pageY - startY);
 
   
 
-                if (height > minHeight) {
+    
 
   
 
-                  element.style.height = height + 'px';
+                            if (width > minWidth) {
 
   
 
-                }
+    
 
   
 
-              } else if (handle.classList.contains('jbu-resize-e')) {
+                              element.style.width = width + 'px';
 
   
 
-                const width = originalWidth + (e.pageX - startX);
+    
 
   
 
-                if (width > minWidth) {
+                            }
 
   
 
-                  element.style.width = width + 'px';
+    
 
   
 
-                }
+                            if (height > minHeight) {
 
   
 
-              } else if (handle.classList.contains('jbu-resize-s')) {
+    
 
   
 
-                const height = originalHeight + (e.pageY - startY);
+                              element.style.height = height + 'px';
 
   
 
-                if (height > minHeight) {
+    
 
   
 
-                  element.style.height = height + 'px';
+                            }
 
   
 
-                }
+    
 
   
 
-              }
+                          } else if (handle.classList.contains('jbu-resize-e')) {
 
   
 
-            };
+    
+
+  
+
+                            const width = originalWidth + (e.pageX - startX);
+
+  
+
+    
+
+  
+
+                            if (width > minWidth) {
+
+  
+
+    
+
+  
+
+                              element.style.width = width + 'px';
+
+  
+
+    
+
+  
+
+                            }
+
+  
+
+    
+
+  
+
+                          } else if (handle.classList.contains('jbu-resize-s')) {
+
+  
+
+    
+
+  
+
+                            const height = originalHeight + (e.pageY - startY);
+
+  
+
+    
+
+  
+
+                            if (height > minHeight) {
+
+  
+
+    
+
+  
+
+                              element.style.height = height + 'px';
+
+  
+
+    
+
+  
+
+                            }
+
+  
+
+    
+
+  
+
+                          } else if (handle.classList.contains('jbu-resize-w')) {
+
+  
+
+    
+
+  
+
+                            const width = originalWidth - (e.pageX - startX);
+
+  
+
+    
+
+  
+
+                            const left = originalX + (e.pageX - startX);
+
+  
+
+    
+
+  
+
+                            if (width > minWidth) {
+
+  
+
+    
+
+  
+
+                              element.style.width = width + 'px';
+
+  
+
+    
+
+  
+
+                              element.style.left = left + 'px';
+
+  
+
+    
+
+  
+
+                            }
+
+  
+
+    
+
+  
+
+                          } else if (handle.classList.contains('jbu-resize-nw')) {
+
+  
+
+    
+
+  
+
+                            const width = originalWidth - (e.pageX - startX);
+
+  
+
+    
+
+  
+
+                            const left = originalX + (e.pageX - startX);
+
+  
+
+    
+
+  
+
+                            const height = originalHeight - (e.pageY - startY);
+
+  
+
+    
+
+  
+
+                            const top = originalY + (e.pageY - startY);
+
+  
+
+    
+
+  
+
+                            if (width > minWidth) {
+
+  
+
+    
+
+  
+
+                              element.style.width = width + 'px';
+
+  
+
+    
+
+  
+
+                              element.style.left = left + 'px';
+
+  
+
+    
+
+  
+
+                            }
+
+  
+
+    
+
+  
+
+                            if (height > minHeight) {
+
+  
+
+    
+
+  
+
+                              element.style.height = height + 'px';
+
+  
+
+    
+
+  
+
+                              element.style.top = top + 'px';
+
+  
+
+    
+
+  
+
+                            }
+
+  
+
+    
+
+  
+
+                          } else if (handle.classList.contains('jbu-resize-sw')) {
+
+  
+
+    
+
+  
+
+                            const width = originalWidth - (e.pageX - startX);
+
+  
+
+    
+
+  
+
+                            const left = originalX + (e.pageX - startX);
+
+  
+
+    
+
+  
+
+                            const height = originalHeight + (e.pageY - startY);
+
+  
+
+    
+
+  
+
+                            if (width > minWidth) {
+
+  
+
+    
+
+  
+
+                              element.style.width = width + 'px';
+
+  
+
+    
+
+  
+
+                              element.style.left = left + 'px';
+
+  
+
+    
+
+  
+
+                            }
+
+  
+
+    
+
+  
+
+                            if (height > minHeight) {
+
+  
+
+    
+
+  
+
+                              element.style.height = height + 'px';
+
+  
+
+    
+
+  
+
+                            }
+
+  
+
+    
+
+  
+
+                          }
+
+  
+
+    
+
+  
+
+                        };
 
   
 

@@ -582,3 +582,24 @@
   height: 5px;
   cursor: s-resize;
 }
+.jbu-resize-w {
+  top: 0;
+  left: 0;
+  width: 5px;
+  height: 100%;
+  cursor: w-resize;
+}
+.jbu-resize-nw {
+  top: 0;
+  left: 0;
+  width: 10px;
+  height: 10px;
+  cursor: nw-resize;
+}
+.jbu-resize-sw {
+  bottom: 0;
+  left: 0;
+  width: 10px;
+  height: 10px;
+  cursor: sw-resize;
+}
