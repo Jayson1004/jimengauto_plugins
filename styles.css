@@ -110,9 +110,23 @@
 .jbu-btn.jbu-batch-import {
   flex: 1;
 }
-
+.jbu-tabs{
+  padding: 10px 16px;
+}
+.jbu-tab-btn{
+  font-size: 14px;
+}
+.jbu-tab-btn.active{
+  background-color: #00ff88;
+  font-weight: 600;
+  font-size: 16px;
+  color: red;
+  padding: 10px;
+}
 /* 设置区域 */
 .jbu-settings {
+  display: flex;
+  gap: 15px;
   margin-bottom: 16px;
   padding: 12px;
   background: #2a2a2a;
@@ -136,9 +150,18 @@
   color: #fff;
   font-size: 12px;
 }
+.jbu-style-select{
+  width: 120px;
+  padding: 4px 8px;
+  background: #333;
+  border: 1px solid #555;
+  border-radius: 3px;
+  color: #fff;
+  font-size: 12px;
+}
 
 /* 分镜列表 */
-.jbu-storyboard-list {
+.jbu-storyboard-list,.jbu-video-list {
   margin-bottom: 16px;
   max-height: 300px;
   overflow-y: auto;
@@ -191,7 +214,7 @@
   color: #999;
 }
 
-.jbu-delete-storyboard {
+.jbu-delete-storyboard, .jbu-delete-video {
   background: none;
   border: none;
   color: #999;
@@ -202,7 +225,7 @@
   height: 20px;
 }
 
-.jbu-delete-storyboard:hover {
+.jbu-delete-storyboard:hover, .jbu-delete-video:hover {
   color: #ff4444;
 }
 
@@ -352,23 +375,23 @@
 
 /* 滚动条样式 */
 .jbu-content::-webkit-scrollbar,
-.jbu-storyboard-list::-webkit-scrollbar {
+.jbu-storyboard-list::-webkit-scrollbar, .jbu-video-list::-webkit-scrollbar {
   width: 6px;
 }
 
 .jbu-content::-webkit-scrollbar-track,
-.jbu-storyboard-list::-webkit-scrollbar-track {
+.jbu-storyboard-list::-webkit-scrollbar-track, .jbu-video-list::-webkit-scrollbar-track {
   background: #2a2a2a;
 }
 
 .jbu-content::-webkit-scrollbar-thumb,
-.jbu-storyboard-list::-webkit-scrollbar-thumb {
+.jbu-storyboard-list::-webkit-scrollbar-track, .jbu-video-list::-webkit-scrollbar-track {
   background: #555;
   border-radius: 3px;
 }
 
 .jbu-content::-webkit-scrollbar-thumb:hover,
-.jbu-storyboard-list::-webkit-scrollbar-thumb:hover {
+.jbu-storyboard-list::-webkit-scrollbar-thumb:hover, .jbu-video-list::-webkit-scrollbar-thumb:hover {
   background: #777;
 }
 
@@ -439,7 +462,7 @@
     max-height: 400px;
   }
   
-  .jbu-storyboard-list {
+  .jbu-storyboard-list,.jbu-video-list {
     max-height: 200px;
   }
 }

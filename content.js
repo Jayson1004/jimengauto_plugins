@@ -6,7 +6,10 @@ class JimengBatchUploader {
     this.currentIndex = 0;
     this.storyboards = [];
     this.characters = []; // 初始化角色数组
+    this.videos = []; // 新增：存储视频提示词
     this.interval = 8000; // 默认8秒间隔
+    this.selectedStyle = ''; // 新增：存储选择的风格
+    this.activeTab = 'image'; // 'image' or 'video'
     this.floatingWindow = null;
     this.init();
   }
@@ -16,6 +19,7 @@ class JimengBatchUploader {
     this.bindEvents();
     this.makeDraggable();
     this.makeResizable();
+    this.renderTabs(); // 初始化时渲染正确的tab
   }
 
   // 创建悬浮窗
@@ -32,48 +36,124 @@ class JimengBatchUploader {
         <span class="jbu-title">即梦批量上传</span>
         <button class="jbu-minimize" title="最小化">−</button>
       </div>
+
+      <div class="jbu-tabs">
+        <button class="jbu-btn jbu-tab-btn active" data-tab="image">图片生成</button>
+        <button class="jbu-btn jbu-tab-btn" data-tab="video">视频生成</button>
+      </div>
+
       <div class="jbu-content">
-        <div class="jbu-controls">
-          <button class="jbu-btn jbu-add-storyboard">添加分镜</button>
-          <button class="jbu-btn jbu-batch-import">批量导入图片</button>
-          <button class="jbu-btn jbu-import-prompts">导入提示词</button>
-          <input type="file" id="jbu-file-input" multiple accept="image/*" style="display: none;">
-          <input type="file" id="jbu-prompt-file-input" accept=".csv" style="display: none;">
-        </div>
         
-        <div class="jbu-settings">
-          <label>提交间隔: 
-            <input type="number" class="jbu-interval" value="8" min="4" max="15"> 秒
-          </label>
-          电影实拍
-  Roblox像素风格
-        </div>
+        <!-- 图片生成面板 -->
+        <div class="jbu-tab-panel" id="jbu-image-panel">
+          <div class="jbu-controls">
+            <button class="jbu-btn jbu-add-storyboard">添加分镜</button>
+            <button class="jbu-btn jbu-batch-import">批量导入图片</button>
+            <button class="jbu-btn jbu-import-prompts">导入提示词</button>
+            <input type="file" id="jbu-file-input" multiple accept="image/*" style="display: none;">
+            <input type="file" id="jbu-prompt-file-input" accept=".csv" style="display: none;">
+          </div>
+          
+          <div class="jbu-settings">
+            <label>提交间隔: 
+              <input type="number" class="jbu-interval" value="8" min="4" max="15">秒 
+            </label> 
+            <label> 图片风格:
+              <select class="jbu-style-select">
+                <option value="">无</option>
+                <option value="电影实拍">电影实拍</option>
+                <option value="Roblox像素风格">Roblox像素风格</option>
+                <option value="3D卡通">3D卡通</option>
+                <option value="Realistic Film">Realistic Film</option>
+                <option value="Photograph">Photograph</option>
+                <option value="whimsical">奇思妙想的</option>
+                <option value="Crayon">蜡笔</option>
+                <option value="Toon Shader">卡通着色器</option>
+                <option value="Portrait">人像</option>
+                <option value="Noir Comic">黑色漫画</option>
+                <option value="Ink Watercolor">水彩画</option>
+                <option value="Aerial View">空中视角</option>
+                <option value="Modern Realism">现代现实主义</option>
+                <option value="Futuristic">未来主义</option>
+                <option value="Biblical">圣经的</option>
+                <option value="Fluffy 3D">毛绒3D</option>
+                <option value="Urban Dream">都市梦想</option>
+                <option value="Dreamscape">梦幻景观</option>
+                <option value="Cute Cartoon">可爱卡通</option>
+                <option value="Tiny World">微型世界</option>
+                <option value="Claymation">黏土动画</option>
+                <option value="90s Pixel">90年代像素风格</option>
+                <option value="Low poly">低多边形</option>
+                <option value="Cross Stitch">十字绣</option>
+                <option value="Epic Fantasy">史诗奇幻</option>
+                <option value="Anime">动漫风格</option>
+                <option value="Jurassic">侏罗纪</option>
+                <option value="Impressionist">印象派</option>
+                <option value="US Comic">美国漫画</option>
+                <option value="Cyberpunk">赛博朋克</option>
+                <option value="Neoclassic">新古典主义</option>
+                 <option value="Prehistoric">史前艺术</option>
+                <option value="Roman Art">罗马艺术</option>
+                <option value="Nature Photo">自然摄影</option>
+                <option value="Pop Art">波普艺术</option>
+                <option value="B&W Film">黑白胶卷</option>
+                 <option value="Gothic">哥特式</option>
+                <option value="B&W Graphic">黑白图形</option>
+                <option value="Oil painting">油画</option>
+                <option value="Fairy Tale">童话故事</option>
+                <option value="Retro Anime">复古动漫</option>
+                 <option value="Comic">漫画</option>
+                <option value="Comic Strip">漫画条</option>
+                <option value="Chinese ancient">中国古代</option>
+              </select>
+            </label>
+          </div>
 
+          <div class="jbu-character-section">
+            <h3 class="jbu-section-title">角色列表 (自动提取)</h3>
+            <div id="jbu-character-list" class="jbu-character-list"></div>
+          </div>
 
-        <div class="jbu-character-section">
-          <h3 class="jbu-section-title">角色列表 (自动提取)</h3>
-          <div id="jbu-character-list" class="jbu-character-list">
-            <!-- 角色列表将在这里渲染 -->
+          <div class="jbu-storyboard-list" id="jbu-storyboard-list"></div>
+
+          <div class="jbu-progress">
+            <div class="jbu-progress-text">准备就绪</div>
+            <div class="jbu-progress-bar">
+              <div class="jbu-progress-fill"></div>
+            </div>
+          </div>
+
+          <div class="jbu-actions">
+            <button class="jbu-btn jbu-start">开始上传</button>
+            <button class="jbu-btn jbu-pause" disabled>暂停</button>
+            <button class="jbu-btn jbu-stop" disabled>停止</button>
+            <button class="jbu-btn jbu-clear">清空列表</button>
           </div>
         </div>
 
-        <div class="jbu-storyboard-list" id="jbu-storyboard-list">
-          <!-- 分镜列表 -->
-        </div>
-
-        <div class="jbu-progress">
-          <div class="jbu-progress-text">准备就绪</div>
-          <div class="jbu-progress-bar">
-            <div class="jbu-progress-fill"></div>
+        <!-- 视频生成面板 -->
+        <div class="jbu-tab-panel" id="jbu-video-panel" style="display: none;">
+          <div class="jbu-controls">
+             <button class="jbu-btn jbu-video-batch-import-images">批量导入参考图</button>
+             <input type="file" id="jbu-video-file-input" multiple accept="image/*" style="display: none;">
+          </div>
+           <div class="jbu-video-list" id="jbu-video-list">
+            <!-- 视频列表将在这里渲染 -->
+          </div>
+           <div class="jbu-progress">
+            <div class="jbu-progress-text">准备就绪</div>
+            <div class="jbu-progress-bar">
+              <div class="jbu-progress-fill"></div>
+            </div>
+          </div>
+           <div class="jbu-actions">
+            <button class="jbu-btn jbu-video-start">开始生成视频</button>
+            <button class="jbu-btn jbu-video-pause" disabled>暂停</button>
+            <button class="jbu-btn jbu-video-stop" disabled>停止</button>
+            <button class="jbu-btn jbu-video-clear">清空列表</button>
           </div>
         </div>
 
-        <div class="jbu-actions">
-          <button class="jbu-btn jbu-start">开始上传</button>
-          <button class="jbu-btn jbu-pause" disabled>暂停</button>
-          <button class="jbu-btn jbu-stop" disabled>停止</button>
-          <button class="jbu-btn jbu-clear">清空列表</button>
-        </div>
       </div>
       <div class="jbu-resize-handle jbu-resize-se"></div>
       <div class="jbu-resize-handle jbu-resize-e"></div>
@@ -93,64 +173,225 @@ class JimengBatchUploader {
     });
   }
 
+  renderTabs() {
+    const container = this.floatingWindow;
+    const imagePanel = container.querySelector('#jbu-image-panel');
+    const videoPanel = container.querySelector('#jbu-video-panel');
+    const imageTabBtn = container.querySelector('.jbu-tab-btn[data-tab="image"]');
+    const videoTabBtn = container.querySelector('.jbu-tab-btn[data-tab="video"]');
+
+    if (this.activeTab === 'image') {
+      imagePanel.style.display = 'block';
+      videoPanel.style.display = 'none';
+      imageTabBtn.classList.add('active');
+      videoTabBtn.classList.remove('active');
+    } else {
+      imagePanel.style.display = 'none';
+      videoPanel.style.display = 'block';
+      imageTabBtn.classList.remove('active');
+      videoTabBtn.classList.add('active');
+    }
+  }
+
   // 绑定事件
   bindEvents() {
     const container = this.floatingWindow;
+
+    // Tab切换
+    container.querySelectorAll('.jbu-tab-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        this.activeTab = e.target.dataset.tab;
+        this.renderTabs();
+      });
+    });
     
     // 最小化按钮
     container.querySelector('.jbu-minimize').addEventListener('click', () => {
       this.toggleMinimize();
     });
 
-    // 添加分镜
+    // --- 图片生成事件 ---
     container.querySelector('.jbu-add-storyboard').addEventListener('click', () => {
       this.addStoryboard();
     });
-
-    // 批量导入图片
     container.querySelector('.jbu-batch-import').addEventListener('click', () => {
       document.getElementById('jbu-file-input').click();
     });
-
-    // 导入提示词
     container.querySelector('.jbu-import-prompts').addEventListener('click', () => {
       document.getElementById('jbu-prompt-file-input').click();
     });
-
-    // 图片文件选择
     document.getElementById('jbu-file-input').addEventListener('change', (e) => {
       this.handleBatchImport(e.target.files);
-      e.target.value = ''; // 重置，以便可以再次选择相同的文件
+      e.target.value = '';
     });
-
-    // 提示词文件选择
     document.getElementById('jbu-prompt-file-input').addEventListener('change', (e) => {
       this.handlePromptImport(e.target.files[0]);
-      e.target.value = ''; // 重置
+      e.target.value = '';
     });
-
-    // 间隔设置
     container.querySelector('.jbu-interval').addEventListener('change', (e) => {
       this.interval = parseInt(e.target.value) * 1000;
     });
-
-    // 控制按钮
+    container.querySelector('.jbu-style-select').addEventListener('change', (e) => {
+      this.selectedStyle = e.target.value;
+    });
     container.querySelector('.jbu-start').addEventListener('click', () => {
       this.startUpload();
     });
-
     container.querySelector('.jbu-pause').addEventListener('click', () => {
       this.pauseUpload();
     });
-
     container.querySelector('.jbu-stop').addEventListener('click', () => {
       this.stopUpload();
     });
-
     container.querySelector('.jbu-clear').addEventListener('click', () => {
       this.clearStoryboards();
     });
+
+    // --- 视频生成事件 ---
+    container.querySelector('.jbu-video-batch-import-images').addEventListener('click', () => {
+      document.getElementById('jbu-video-file-input').click();
+    });
+     document.getElementById('jbu-video-file-input').addEventListener('change', (e) => {
+      this.handleVideoBatchImport(e.target.files); // 实现
+      e.target.value = '';
+    });
+     container.querySelector('.jbu-video-clear').addEventListener('click', () => {
+      this.clearVideos(); // 实现
+    });
+    container.querySelector('.jbu-video-start').addEventListener('click', () => {
+      this.startVideoGeneration();
+    });
   }
+
+  // ... (existing image generation functions)
+
+  // ---- Video Generation Functions ----
+
+  async startVideoGeneration() {
+    const modeElement = document.querySelector('div[class^="dimension-layout-"] div[class^="toolbar-settings-"] .lv-select-view .lv-select-view-value');
+
+    if (!modeElement || !modeElement.textContent.includes('视频生成')) {
+      alert('请先在即梦输入框底部工具栏手动选择“视频生成”模式，然后再开始。');
+      return;
+    }
+
+    if (this.videos.length === 0) {
+      alert('请先添加视频任务');
+      return;
+    }
+
+    console.log('开始批量生成视频，总共', this.videos.length, '个视频');
+    
+    this.videos.forEach(video => {
+      if (video.status !== 'completed') {
+        video.status = 'pending';
+      }
+    });
+
+    this.isRunning = true;
+    this.isPaused = false;
+    this.currentIndex = 0;
+    
+    // TODO: Update buttons for video tab
+    this.renderVideos();
+    await this.processNextVideo();
+  }
+
+  async processNextVideo() {
+    if (!this.isRunning || this.isPaused) {
+      return;
+    }
+    
+    if (this.currentIndex >= this.videos.length) {
+      this.completeUpload(); // Can reuse completion logic
+      return;
+    }
+
+    const video = this.videos[this.currentIndex];
+    console.log(`开始处理第${this.currentIndex + 1}个视频: ${video.name}`);
+    // TODO: Update progress for video tab
+
+    if (this.currentIndex > 0) {
+      console.log('清理上一个视频的内容...');
+      try {
+        await this.clearPreviousContent();
+      } catch (error) {
+        console.error('清理内容失败:', error);
+      }
+    }
+    
+    try {
+      await this.uploadVideo(video);
+      video.status = 'completed';
+      console.log(`视频 ${video.name} 处理成功`);
+    } catch (error) {
+      console.error(`视频 ${video.name} 处理失败:`, error);
+      video.status = 'failed';
+    }
+
+    this.renderVideos();
+    this.currentIndex++;
+
+    if (this.isRunning && !this.isPaused) {
+      setTimeout(() => {
+        if (this.isRunning && !this.isPaused) {
+          this.processNextVideo();
+        }
+      }, this.interval);
+    }
+  }
+
+  async uploadVideo(video) {
+    console.log(`开始上传视频任务: ${video.name}`);
+    video.status = 'uploading';
+    this.renderVideos();
+
+    try {
+      // 1. 上传参考图 (if any)
+      console.log('步骤1: 上传参考图...');
+      const imagesToUpload = video.image ? [video.image] : [];
+      
+      if (imagesToUpload.length > 0) {
+        try {
+          await this.uploadImages(imagesToUpload);
+          console.log('✓ 参考图上传成功');
+        } catch (error) {
+          console.error('✗ 参考图上传失败:', error.message);
+          throw new Error(`参考图上传失败: ${error.message}`);
+        }
+      } else {
+        console.log('无参考图，跳过上传。');
+      }
+
+      // 2. 填写提示词
+      console.log('步骤2: 填写视频提示词...', video.prompt.substring(0, 50) + '...');
+      try {
+        await this.fillPrompt(video.prompt);
+        console.log('✓ 提示词填写成功');
+      } catch (error) {
+        console.error('✗ 提示词填写失败:', error.message);
+        throw new Error(`提示词填写失败: ${error.message}`);
+      }
+
+      // 3. 点击生成按钮
+      console.log('步骤3: 点击生成按钮...');
+      try {
+        await this.clickGenerate();
+        console.log('✓ 生成按钮点击成功');
+      } catch (error) {
+        console.error('✗ 生成按钮点击失败:', error.message);
+        throw new Error(`生成按钮点击失败: ${error.message}`);
+      }
+      
+      console.log(`✓ 视频 ${video.name} 发送完成`);
+    } catch (error) {
+      console.error(`✗ 视频 ${video.name} 上传失败:`, error.message);
+      throw error;
+    }
+  }
+
+  // ---- END Video Generation Functions ----
+
 
     // 添加单个分镜
 
@@ -182,239 +423,1879 @@ class JimengBatchUploader {
 
   
 
-    // 批量导入提示词 (CSV)
-
-    handlePromptImport(file) {
-
-      if (!file) return;
+        // 批量导入提示词 (CSV)
 
   
 
-      const reader = new FileReader();
-
-      reader.onload = (e) => {
-
-        const buffer = e.target.result;
-
-        const uint8array = new Uint8Array(buffer);
-
-        let content;
+        handlePromptImport(file) {
 
   
 
-        try {
-
-          // 智能解码，优先处理带BOM的UTF-8，然后尝试UTF-8，最后回退到GBK
-
-          if (uint8array.length >= 3 && uint8array[0] === 0xEF && uint8array[1] === 0xBB && uint8array[2] === 0xBF) {
-
-            // UTF-8 with BOM
-
-            content = new TextDecoder('utf-8').decode(uint8array.slice(3));
-
-          } else {
-
-            // 尝试使用UTF-8解码，如果失败则回退到GBK
-
-            try {
-
-              // 使用fatal: true来严格检查UTF-8格式
-
-              content = new TextDecoder('utf-8', { fatal: true }).decode(uint8array);
-
-            } catch (error) {
-
-              console.log('UTF-8 decoding failed, falling back to GBK.');
-
-              content = new TextDecoder('gbk').decode(uint8array);
-
-            }
-
-          }
-
-        } catch (error) {
-
-          alert('文件解码失败，请确保您的CSV文件是 UTF-8 或 GBK 编码。');
-
-          return;
-
-        }
-
-        
-
-        const data = this._parseCSV(content);
+          if (!file) return;
 
   
-
-        if (data.length <= 1) { // 至少需要一行数据（除了表头）
-
-          alert('CSV文件为空或格式不正确。请确保文件包含表头和至少一行数据。');
-
-          return;
-
-        }
-
-  
-
-        // 跳过表头，从第二行开始处理
-
-        const prompts = data.slice(1).map(row => {
-
-          if (row && row.length >= 2) {
-
-            return row[1].trim(); // 提取第二列作为提示词
-
-          }
-
-          return null;
-
-        }).filter(p => p); // 过滤掉无效的行
-
-  
-
-        if (prompts.length === 0) {
-
-          alert('在CSV文件中没有找到有效的分镜提示词。');
-
-          return;
-
-        }
-
-  
-
-        prompts.forEach(prompt => {
-
-          this.addStoryboard(prompt);
-
-        });
-
-        
-
-        this.updateAndRenderCharacters(); // 更新角色列表
-
-      };
-
-      // 以ArrayBuffer格式读取文件，以便后续进行智能解码
-
-      reader.readAsArrayBuffer(file);
-
-    }
-
-  
-
-    // 专业CSV解析器
-
-    _parseCSV(str) {
-
-      const result = [];
-
-      let currentRow = [];
-
-      let currentField = '';
-
-      let inQuotedField = false;
-
-  
-
-      for (let i = 0; i < str.length; i++) {
-
-        const char = str[i];
-
-        const nextChar = str[i + 1];
-
-  
-
-        if (inQuotedField) {
-
-          if (char === '"') {
-
-            if (nextChar === '"') { // 处理转义引号 ""
-
-              currentField += '"';
-
-              i++; // 跳过下一个引号
-
-            } else {
-
-              inQuotedField = false; // 引号字段结束
-
-            }
-
-          } else {
-
-            currentField += char;
-
-          }
-
-        } else {
-
-          if (char === '"') {
-
-            inQuotedField = true;
-
-          } else if (char === ',') {
-
-            currentRow.push(currentField);
-
-            currentField = '';
-
-          } else if (char === '\n' || char === '\r') {
-
-            currentRow.push(currentField);
-
-            result.push(currentRow);
-
-            currentRow = [];
-
-            currentField = '';
-
-            // 处理 Windows 的 \r\n
-
-            if (char === '\r' && nextChar === '\n') {
-
-              i++;
-
-            }
-
-          } else {
-
-            currentField += char;
-
-          }
-
-        }
-
-      }
-
-      // 添加最后一行
-
-      if (currentField || currentRow.length > 0) {
-
-        currentRow.push(currentField);
-
-        result.push(currentRow);
-
-      }
 
       
 
-      // 清理可能因文件末尾换行符产生的空行
+  
 
-      if (result.length > 0 && result[result.length - 1].every(field => field === '')) {
-
-        result.pop();
-
-      }
+          const reader = new FileReader();
 
   
 
-      return result;
-
-    }
+          reader.onload = (e) => {
 
   
 
-    // ---- 角色列表功能 ----
+            const buffer = e.target.result;
+
+  
+
+            const uint8array = new Uint8Array(buffer);
+
+  
+
+            let content;
+
+  
+
+      
+
+  
+
+            try {
+
+  
+
+              // 智能解码
+
+  
+
+              if (uint8array.length >= 3 && uint8array[0] === 0xEF && uint8array[1] === 0xBB && uint8array[2] === 0xBF) {
+
+  
+
+                content = new TextDecoder('utf-8').decode(uint8array.slice(3));
+
+  
+
+              } else {
+
+  
+
+                try {
+
+  
+
+                  content = new TextDecoder('utf-8', { fatal: true }).decode(uint8array);
+
+  
+
+                } catch (error) {
+
+  
+
+                  content = new TextDecoder('gbk').decode(uint8array);
+
+  
+
+                }
+
+  
+
+              }
+
+  
+
+            } catch (error) {
+
+  
+
+              alert('文件解码失败，请确保您的CSV文件是 UTF-8 或 GBK 编码。');
+
+  
+
+              return;
+
+  
+
+            }
+
+  
+
+            
+
+  
+
+            const data = this._parseCSV(content);
+
+  
+
+      
+
+  
+
+            if (data.length <= 1) {
+
+  
+
+              alert('CSV文件为空或格式不正确。');
+
+  
+
+              return;
+
+  
+
+            }
+
+  
+
+      
+
+  
+
+            // 跳过表头处理数据
+
+  
+
+            data.slice(1).forEach(row => {
+
+  
+
+              if (row && row.length > 1) {
+
+  
+
+                const imagePrompt = row[1] ? row[1].trim() : '';
+
+  
+
+                const videoPrompt = row[2] ? row[2].trim() : '';
+
+  
+
+    
+
+  
+
+                if (imagePrompt) {
+
+  
+
+                  this.addStoryboard(imagePrompt);
+
+  
+
+                }
+
+  
+
+                if (videoPrompt) {
+
+  
+
+                  this.addVideo(videoPrompt);
+
+  
+
+                }
+
+  
+
+              }
+
+  
+
+            });
+
+  
+
+            
+
+  
+
+            this.updateAndRenderCharacters(); // 更新角色列表
+
+  
+
+            this.renderVideos(); // 渲染视频列表
+
+  
+
+          };
+
+  
+
+          reader.readAsArrayBuffer(file);
+
+  
+
+        }
+
+  
+
+      
+
+  
+
+        // 专业CSV解析器
+
+  
+
+        _parseCSV(str) {
+
+  
+
+          const result = [];
+
+  
+
+          let currentRow = [];
+
+  
+
+          let currentField = '';
+
+  
+
+          let inQuotedField = false;
+
+  
+
+      
+
+  
+
+          for (let i = 0; i < str.length; i++) {
+
+  
+
+            const char = str[i];
+
+  
+
+            const nextChar = str[i + 1];
+
+  
+
+      
+
+  
+
+            if (inQuotedField) {
+
+  
+
+              if (char === '"') {
+
+  
+
+                if (nextChar === '"') { // 处理转义引号 ""
+
+  
+
+                  currentField += '"';
+
+  
+
+                  i++; // 跳过下一个引号
+
+  
+
+                } else {
+
+  
+
+                  inQuotedField = false; // 引号字段结束
+
+  
+
+                }
+
+  
+
+              } else {
+
+  
+
+                currentField += char;
+
+  
+
+              }
+
+  
+
+            } else {
+
+  
+
+              if (char === '"') {
+
+  
+
+                inQuotedField = true;
+
+  
+
+              } else if (char === ',') {
+
+  
+
+                currentRow.push(currentField);
+
+  
+
+                currentField = '';
+
+  
+
+              } else if (char === '\n' || char === '\r') {
+
+  
+
+                currentRow.push(currentField);
+
+  
+
+                result.push(currentRow);
+
+  
+
+                currentRow = [];
+
+  
+
+                currentField = '';
+
+  
+
+                // 处理 Windows 的 \r\n
+
+  
+
+                if (char === '\r' && nextChar === '\n') {
+
+  
+
+                  i++;
+
+  
+
+                }
+
+  
+
+              } else {
+
+  
+
+                currentField += char;
+
+  
+
+              }
+
+  
+
+            }
+
+  
+
+          }
+
+  
+
+          // 添加最后一行
+
+  
+
+          if (currentField || currentRow.length > 0) {
+
+  
+
+            currentRow.push(currentField);
+
+  
+
+            result.push(currentRow);
+
+  
+
+          }
+
+  
+
+          
+
+  
+
+          // 清理可能因文件末尾换行符产生的空行
+
+  
+
+          if (result.length > 0 && result[result.length - 1].every(field => field === '')) {
+
+  
+
+            result.pop();
+
+  
+
+          }
+
+  
+
+      
+
+  
+
+          return result;
+
+  
+
+        }
+
+  
+
+    
+
+  
+
+        // ---- 视频列表功能 ----
+
+  
+
+    
+
+  
+
+            addVideo(promptText = '') {
+
+  
+
+    
+
+  
+
+              const video = {
+
+  
+
+    
+
+  
+
+                id: Date.now() + this.videos.length,
+
+  
+
+    
+
+  
+
+                name: `视频${this.videos.length + 1}`,
+
+  
+
+    
+
+  
+
+                image: null,
+
+  
+
+    
+
+  
+
+                prompt: promptText,
+
+  
+
+    
+
+  
+
+                status: 'pending' // pending, uploading, completed, failed
+
+  
+
+    
+
+  
+
+              };
+
+  
+
+    
+
+  
+
+              this.videos.push(video);
+
+  
+
+    
+
+  
+
+            }
+
+  
+
+    
+
+  
+
+        
+
+  
+
+    
+
+  
+
+            renderVideos() {
+
+  
+
+    
+
+  
+
+              const listContainer = document.getElementById('jbu-video-list');
+
+  
+
+    
+
+  
+
+              listContainer.innerHTML = '';
+
+  
+
+    
+
+  
+
+        
+
+  
+
+    
+
+  
+
+              if (this.videos.length === 0) {
+
+  
+
+    
+
+  
+
+                listContainer.innerHTML = '<p class="jbu-no-items">暂无视频任务，请通过"导入提示词"添加。</p>';
+
+  
+
+    
+
+  
+
+                return;
+
+  
+
+    
+
+  
+
+              }
+
+  
+
+    
+
+  
+
+        
+
+  
+
+    
+
+  
+
+              this.videos.forEach((video, index) => {
+
+  
+
+    
+
+  
+
+                const videoDiv = document.createElement('div');
+
+  
+
+    
+
+  
+
+                videoDiv.className = `jbu-storyboard ${video.status}`; // 使用jbu-storyboard样式
+
+  
+
+    
+
+  
+
+                videoDiv.draggable = true; // 允许拖拽
+
+  
+
+    
+
+  
+
+                videoDiv.dataset.index = index;
+
+  
+
+    
+
+  
+
+                
+
+  
+
+    
+
+  
+
+                const imagePreview = video.image
+
+  
+
+    
+
+  
+
+                  ? `<div class="jbu-image-preview">
+
+  
+
+    
+
+  
+
+                      <img src="${URL.createObjectURL(video.image)}" alt="预览">
+
+  
+
+    
+
+  
+
+                      <button class="jbu-remove-image" data-id="${video.id}">×</button>
+
+  
+
+    
+
+  
+
+                    </div>`
+
+  
+
+    
+
+  
+
+                  : `<div class="jbu-image-preview jbu-image-placeholder"></div>`;
+
+  
+
+    
+
+  
+
+        
+
+  
+
+    
+
+  
+
+                videoDiv.innerHTML = `
+
+  
+
+    
+
+  
+
+                  <div class="jbu-storyboard-header">
+
+  
+
+    
+
+  
+
+                    <span class="jbu-storyboard-name">${video.name}</span>
+
+  
+
+    
+
+  
+
+                    <span class="jbu-storyboard-status">${this.getStatusText(video.status)}</span>
+
+  
+
+    
+
+  
+
+                    <button class="jbu-delete-video" data-id="${video.id}">×</button>
+
+  
+
+    
+
+  
+
+                  </div>
+
+  
+
+    
+
+  
+
+                  <div class="jbu-storyboard-content">
+
+  
+
+    
+
+  
+
+                    <div class="jbu-images">
+
+  
+
+    
+
+  
+
+                      ${imagePreview}
+
+  
+
+    
+
+  
+
+                      ${!video.image ? `<button class="jbu-add-image" data-id="${video.id}">+</button>` : ''}
+
+  
+
+    
+
+  
+
+                    </div>
+
+  
+
+    
+
+  
+
+                    <textarea class="jbu-prompt" placeholder="输入视频提示词..." data-id="${video.id}">${video.prompt}</textarea>
+
+  
+
+    
+
+  
+
+                  </div>
+
+  
+
+    
+
+  
+
+                `;
+
+  
+
+    
+
+  
+
+                listContainer.appendChild(videoDiv);
+
+  
+
+    
+
+  
+
+              });
+
+  
+
+    
+
+  
+
+        
+
+  
+
+    
+
+  
+
+              this.bindVideoEvents();
+
+  
+
+    
+
+  
+
+              this.setupVideoDragAndDrop(); // 添加视频拖拽
+
+  
+
+    
+
+  
+
+            }
+
+  
+
+    
+
+  
+
+        
+
+  
+
+    
+
+  
+
+            bindVideoEvents() {
+
+  
+
+    
+
+  
+
+              // 添加图片按钮
+
+  
+
+    
+
+  
+
+              document.querySelectorAll('#jbu-video-list .jbu-add-image').forEach(btn => {
+
+  
+
+    
+
+  
+
+                btn.addEventListener('click', (e) => {
+
+  
+
+    
+
+  
+
+                  const id = parseInt(e.target.dataset.id);
+
+  
+
+    
+
+  
+
+                  this.addImageToVideo(id);
+
+  
+
+    
+
+  
+
+                });
+
+  
+
+    
+
+  
+
+              });
+
+  
+
+    
+
+  
+
+        
+
+  
+
+    
+
+  
+
+              // 删除图片按钮
+
+  
+
+    
+
+  
+
+              document.querySelectorAll('#jbu-video-list .jbu-remove-image').forEach(btn => {
+
+  
+
+    
+
+  
+
+                btn.addEventListener('click', (e) => {
+
+  
+
+    
+
+  
+
+                  const id = parseInt(e.target.dataset.id);
+
+  
+
+    
+
+  
+
+                  this.removeImageFromVideo(id);
+
+  
+
+    
+
+  
+
+                });
+
+  
+
+    
+
+  
+
+              });
+
+  
+
+    
+
+  
+
+        
+
+  
+
+    
+
+  
+
+              // 更新提示词
+
+  
+
+    
+
+  
+
+              document.querySelectorAll('#jbu-video-list .jbu-prompt').forEach(textarea => {
+
+  
+
+    
+
+  
+
+                textarea.addEventListener('input', (e) => {
+
+  
+
+    
+
+  
+
+                  const id = parseInt(e.target.dataset.id);
+
+  
+
+    
+
+  
+
+                  const video = this.videos.find(v => v.id === id);
+
+  
+
+    
+
+  
+
+                  if (video) {
+
+  
+
+    
+
+  
+
+                    video.prompt = e.target.value;
+
+  
+
+    
+
+  
+
+                  }
+
+  
+
+    
+
+  
+
+                });
+
+  
+
+    
+
+  
+
+              });
+
+  
+
+    
+
+  
+
+        
+
+  
+
+    
+
+  
+
+              // 删除视频
+
+  
+
+    
+
+  
+
+              document.querySelectorAll('.jbu-delete-video').forEach(btn => {
+
+  
+
+    
+
+  
+
+                btn.addEventListener('click', (e) => {
+
+  
+
+    
+
+  
+
+                  const id = parseInt(e.target.dataset.id);
+
+  
+
+    
+
+  
+
+                  this.videos = this.videos.filter(v => v.id !== id);
+
+  
+
+    
+
+  
+
+                  this.reorderVideos(); // 重新排序视频名称
+
+  
+
+    
+
+  
+
+                  this.renderVideos();
+
+  
+
+    
+
+  
+
+                });
+
+  
+
+    
+
+  
+
+              });
+
+  
+
+    
+
+  
+
+            }
+
+  
+
+    
+
+  
+
+        
+
+  
+
+    
+
+  
+
+            setupVideoDragAndDrop() {
+
+  
+
+    
+
+  
+
+              const listContainer = document.getElementById('jbu-video-list');
+
+  
+
+    
+
+  
+
+              let draggedElement = null;
+
+  
+
+    
+
+  
+
+          
+
+  
+
+    
+
+  
+
+              listContainer.addEventListener('dragstart', (e) => {
+
+  
+
+    
+
+  
+
+                draggedElement = e.target;
+
+  
+
+    
+
+  
+
+                e.target.style.opacity = '0.5';
+
+  
+
+    
+
+  
+
+              });
+
+  
+
+    
+
+  
+
+          
+
+  
+
+    
+
+  
+
+              listContainer.addEventListener('dragend', (e) => {
+
+  
+
+    
+
+  
+
+                e.target.style.opacity = '';
+
+  
+
+    
+
+  
+
+                draggedElement = null;
+
+  
+
+    
+
+  
+
+              });
+
+  
+
+    
+
+  
+
+          
+
+  
+
+    
+
+  
+
+              listContainer.addEventListener('dragover', (e) => {
+
+  
+
+    
+
+  
+
+                e.preventDefault();
+
+  
+
+    
+
+  
+
+              });
+
+  
+
+    
+
+  
+
+          
+
+  
+
+    
+
+  
+
+              listContainer.addEventListener('drop', (e) => {
+
+  
+
+    
+
+  
+
+                e.preventDefault();
+
+  
+
+    
+
+  
+
+                if (draggedElement && e.target.classList.contains('jbu-storyboard')) {
+
+  
+
+    
+
+  
+
+                  const fromIndex = parseInt(draggedElement.dataset.index);
+
+  
+
+    
+
+  
+
+                  const toIndex = parseInt(e.target.dataset.index);
+
+  
+
+    
+
+  
+
+                  
+
+  
+
+    
+
+  
+
+                  // 重新排序数组
+
+  
+
+    
+
+  
+
+                  const item = this.videos.splice(fromIndex, 1)[0];
+
+  
+
+    
+
+  
+
+                  this.videos.splice(toIndex, 0, item);
+
+  
+
+    
+
+  
+
+                  
+
+  
+
+    
+
+  
+
+                  this.renderVideos();
+
+  
+
+    
+
+  
+
+                }
+
+  
+
+    
+
+  
+
+              });
+
+  
+
+    
+
+  
+
+            }
+
+  
+
+    
+
+  
+
+        
+
+  
+
+    
+
+  
+
+            reorderVideos() {
+
+  
+
+    
+
+  
+
+              this.videos.forEach((video, index) => {
+
+  
+
+    
+
+  
+
+                video.name = `视频${index + 1}`;
+
+  
+
+    
+
+  
+
+              });
+
+  
+
+    
+
+  
+
+            }
+
+  
+
+    
+
+  
+
+        
+
+  
+
+    
+
+  
+
+            handleVideoBatchImport(files) {
+
+  
+
+    
+
+  
+
+              Array.from(files).forEach((file, index) => {
+
+  
+
+    
+
+  
+
+                if (index < this.videos.length) {
+
+  
+
+    
+
+  
+
+                  this.videos[index].image = file;
+
+  
+
+    
+
+  
+
+                }
+
+  
+
+    
+
+  
+
+              });
+
+  
+
+    
+
+  
+
+              this.renderVideos();
+
+  
+
+    
+
+  
+
+            }
+
+  
+
+    
+
+  
+
+        
+
+  
+
+    
+
+  
+
+            addImageToVideo(videoId) {
+
+  
+
+    
+
+  
+
+              const fileInput = document.createElement('input');
+
+  
+
+    
+
+  
+
+              fileInput.type = 'file';
+
+  
+
+    
+
+  
+
+              fileInput.accept = 'image/*';
+
+  
+
+    
+
+  
+
+              fileInput.style.display = 'none';
+
+  
+
+    
+
+  
+
+              
+
+  
+
+    
+
+  
+
+              fileInput.addEventListener('change', (e) => {
+
+  
+
+    
+
+  
+
+                const file = e.target.files[0];
+
+  
+
+    
+
+  
+
+                const video = this.videos.find(v => v.id === videoId);
+
+  
+
+    
+
+  
+
+                if (video && file) {
+
+  
+
+    
+
+  
+
+                  video.image = file;
+
+  
+
+    
+
+  
+
+                  this.renderVideos();
+
+  
+
+    
+
+  
+
+                }
+
+  
+
+    
+
+  
+
+                document.body.removeChild(fileInput);
+
+  
+
+    
+
+  
+
+              });
+
+  
+
+    
+
+  
+
+              
+
+  
+
+    
+
+  
+
+              document.body.appendChild(fileInput);
+
+  
+
+    
+
+  
+
+              fileInput.click();
+
+  
+
+    
+
+  
+
+            }
+
+  
+
+    
+
+  
+
+        
+
+  
+
+    
+
+  
+
+            removeImageFromVideo(videoId) {
+
+  
+
+    
+
+  
+
+              const video = this.videos.find(v => v.id === videoId);
+
+  
+
+    
+
+  
+
+              if (video) {
+
+  
+
+    
+
+  
+
+                video.image = null;
+
+  
+
+    
+
+  
+
+                this.renderVideos();
+
+  
+
+    
+
+  
+
+              }
+
+  
+
+    
+
+  
+
+            }
+
+  
+
+    
+
+  
+
+        
+
+  
+
+    
+
+  
+
+            clearVideos() {
+
+  
+
+    
+
+  
+
+              if (confirm('确定要清空所有视频任务吗？')) {
+
+  
+
+    
+
+  
+
+                this.videos = [];
+
+  
+
+    
+
+  
+
+                this.renderVideos();
+
+  
+
+    
+
+  
+
+              }
+
+  
+
+    
+
+  
+
+            }
+
+  
+
+    
+
+  
+
+          
+
+  
+
+    
+
+  
+
+            // ---- END 视频列表功能 ----
+
+  
+
+    
+
+  
+
+          
+
+  
+
+    
+
+  
+
+            // ---- 角色列表功能 ----
 
   
 
@@ -1326,17 +3207,31 @@ class JimengBatchUploader {
 
   
 
-        // 2. 填写提示词
+                // 2. 填写提示词
 
-        console.log('步骤2: 填写提示词...', storyboard.prompt.substring(0, 50) + '...');
+  
 
-        try {
+                const finalPrompt = storyboard.prompt + ' 图片风格：'+this.selectedStyle
 
-          await this.fillPrompt(storyboard.prompt);
+  
 
-          console.log('✓ 提示词填写成功');
+                console.log('步骤2: 填写提示词...', finalPrompt.substring(0, 50) + '...');
 
-        } catch (error) {
+  
+
+                try {
+
+  
+
+                  await this.fillPrompt(finalPrompt);
+
+  
+
+                  console.log('✓ 提示词填写成功');
+
+  
+
+                } catch (error) {
 
           console.error('✗ 提示词填写失败:', error.message);
 
