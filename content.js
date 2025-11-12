@@ -165,7 +165,7 @@ class JimengBatchUploader {
 
     document.body.appendChild(floatingDiv);
     this.floatingWindow = floatingDiv;
-    
+
     // 绑定悬浮球点击事件
     const floatingBall = floatingDiv.querySelector('.jbu-floating-ball');
     floatingBall.addEventListener('click', () => {
@@ -204,7 +204,7 @@ class JimengBatchUploader {
         this.renderTabs();
       });
     });
-    
+
     // 最小化按钮
     container.querySelector('.jbu-minimize').addEventListener('click', () => {
       this.toggleMinimize();
@@ -251,11 +251,11 @@ class JimengBatchUploader {
     container.querySelector('.jbu-video-batch-import-images').addEventListener('click', () => {
       document.getElementById('jbu-video-file-input').click();
     });
-     document.getElementById('jbu-video-file-input').addEventListener('change', (e) => {
+    document.getElementById('jbu-video-file-input').addEventListener('change', (e) => {
       this.handleVideoBatchImport(e.target.files); // 实现
       e.target.value = '';
     });
-     container.querySelector('.jbu-video-clear').addEventListener('click', () => {
+    container.querySelector('.jbu-video-clear').addEventListener('click', () => {
       this.clearVideos(); // 实现
     });
     container.querySelector('.jbu-video-start').addEventListener('click', () => {
@@ -281,7 +281,7 @@ class JimengBatchUploader {
     }
 
     console.log('开始批量生成视频，总共', this.videos.length, '个视频');
-    
+
     this.videos.forEach(video => {
       if (video.status !== 'completed') {
         video.status = 'pending';
@@ -291,7 +291,7 @@ class JimengBatchUploader {
     this.isRunning = true;
     this.isPaused = false;
     this.currentIndex = 0;
-    
+
     // TODO: Update buttons for video tab
     this.renderVideos();
     await this.processNextVideo();
@@ -301,7 +301,7 @@ class JimengBatchUploader {
     if (!this.isRunning || this.isPaused) {
       return;
     }
-    
+
     if (this.currentIndex >= this.videos.length) {
       this.completeUpload(); // Can reuse completion logic
       return;
@@ -319,7 +319,7 @@ class JimengBatchUploader {
         console.error('清理内容失败:', error);
       }
     }
-    
+
     try {
       await this.uploadVideo(video);
       video.status = 'completed';
@@ -350,7 +350,7 @@ class JimengBatchUploader {
       // 1. 上传参考图 (if any)
       console.log('步骤1: 上传参考图...');
       const imagesToUpload = video.image ? [video.image] : [];
-      
+
       if (imagesToUpload.length > 0) {
         try {
           await this.uploadImages(imagesToUpload);
@@ -376,13 +376,13 @@ class JimengBatchUploader {
       // 3. 点击生成按钮
       console.log('步骤3: 点击生成按钮...');
       try {
-        await this.clickGenerate();
+        // await this.clickGenerate();
         console.log('✓ 生成按钮点击成功');
       } catch (error) {
         console.error('✗ 生成按钮点击失败:', error.message);
         throw new Error(`生成按钮点击失败: ${error.message}`);
       }
-      
+
       console.log(`✓ 视频 ${video.name} 发送完成`);
     } catch (error) {
       console.error(`✗ 视频 ${video.name} 上传失败:`, error.message);
@@ -393,701 +393,220 @@ class JimengBatchUploader {
   // ---- END Video Generation Functions ----
 
 
-    // 添加单个分镜
+  // 添加单个分镜
 
-    addStoryboard(promptText = '') {
+  addStoryboard(promptText = '') {
 
-      const storyboard = {
+    const storyboard = {
 
-        id: Date.now() + this.storyboards.length,
+      id: Date.now() + this.storyboards.length,
 
-        name: `分镜${this.storyboards.length + 1}`,
+      name: `分镜${this.storyboards.length + 1}`,
 
-        images: [],
+      images: [],
 
-        prompt: promptText,
+      prompt: promptText,
 
-        status: 'pending' // pending, uploading, completed, failed
+      status: 'pending' // pending, uploading, completed, failed
 
-      };
+    };
 
-      
 
-      this.storyboards.push(storyboard);
 
-      this.renderStoryboards();
+    this.storyboards.push(storyboard);
 
+    this.renderStoryboards();
+
+    this.updateAndRenderCharacters(); // 更新角色列表
+
+  }
+
+
+   // 专业CSV解析器
+  _parseCSV(str) {
+    const result = [];
+    let currentRow = [];
+    let currentField = '';
+    let inQuotedField = false;
+    for (let i = 0; i < str.length; i++) {
+      const char = str[i];
+      const nextChar = str[i + 1];
+      if (inQuotedField) {
+        if (char === '"') {
+          if (nextChar === '"') { // 处理转义引号 ""
+            currentField += '"';
+            i++; // 跳过下一个引号
+          } else {
+            inQuotedField = false; // 引号字段结束
+          }
+        } else {
+          currentField += char;
+        }
+      } else {
+        if (char === '"') {
+          inQuotedField = true;
+        } else if (char === ',') {
+          currentRow.push(currentField);
+          currentField = '';
+        } else if (char === '\n' || char === '\r') {
+          currentRow.push(currentField);
+          result.push(currentRow);
+          currentRow = [];
+          currentField = '';
+          // 处理 Windows 的 \r\n
+          if (char === '\r' && nextChar === '\n') {
+            i++;
+          }
+        } else {
+          currentField += char;
+        }
+      }
+    }
+    // 添加最后一行
+    if (currentField || currentRow.length > 0) {
+      currentRow.push(currentField);
+      result.push(currentRow);
+    }
+    // 清理可能因文件末尾换行符产生的空行
+    if (result.length > 0 && result[result.length - 1].every(field => field === '')) {
+      result.pop();
+    }
+    return result;
+  }
+  // 批量导入提示词 (CSV)
+
+  handlePromptImport(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const buffer = e.target.result;
+      const uint8array = new Uint8Array(buffer);
+      let content;
+      try {
+        // 智能解码
+        if (uint8array.length >= 3 && uint8array[0] === 0xEF && uint8array[1] === 0xBB && uint8array[2] === 0xBF) {
+          content = new TextDecoder('utf-8').decode(uint8array.slice(3));
+        } else {
+          try {
+            content = new TextDecoder('utf-8', { fatal: true }).decode(uint8array);
+          } catch (error) {
+            content = new TextDecoder('gbk').decode(uint8array);
+          }
+        }
+      } catch (error) {
+        alert('文件解码失败，请确保您的CSV文件是 UTF-8 或 GBK 编码。');
+        return;
+      }
+
+      const data = this._parseCSV(content);
+      if (data.length <= 1) {
+        alert('CSV文件为空或格式不正确。');
+        return;
+      }
+      // 跳过表头处理数据
+      data.slice(1).forEach(row => {
+        if (row && row.length > 1) {
+          const imagePrompt = row[1] ? row[1].trim() : '';
+          const videoPrompt = row[2] ? row[2].trim() : '';
+          if (imagePrompt) {
+            this.addStoryboard(imagePrompt);
+          }
+          if (videoPrompt) {
+            this.addVideo(videoPrompt);
+          }
+        }
+      });
       this.updateAndRenderCharacters(); // 更新角色列表
+      this.renderVideos(); // 渲染视频列表
 
+    };
+
+    reader.readAsArrayBuffer(file);
+
+
+
+  }
+
+
+
+
+
+
+
+ 
+
+
+  // ---- 视频列表功能 ----
+  addVideo(promptText = '') {
+    const video = {
+      id: Date.now() + this.videos.length,
+      name: `视频${this.videos.length + 1}`,
+      image: null,
+      prompt: promptText,
+      status: 'pending' // pending, uploading, completed, failed
+    };
+
+    this.videos.push(video);
+  }
+
+  renderVideos() {
+    const listContainer = document.getElementById('jbu-video-list');
+    listContainer.innerHTML = '';
+    if (this.videos.length === 0) {
+      listContainer.innerHTML = '<p class="jbu-no-items">暂无视频任务，请通过"导入提示词"添加。</p>';
+      return;
     }
 
-  
+    this.videos.forEach((video, index) => {
+      const videoDiv = document.createElement('div');
 
-        // 批量导入提示词 (CSV)
 
-  
 
-        handlePromptImport(file) {
 
-  
 
-          if (!file) return;
 
-  
 
-      
+      videoDiv.className = `jbu-storyboard ${video.status}`; // 使用jbu-storyboard样式
 
-  
 
-          const reader = new FileReader();
 
-  
 
-          reader.onload = (e) => {
 
-  
 
-            const buffer = e.target.result;
 
-  
+      videoDiv.draggable = true; // 允许拖拽
 
-            const uint8array = new Uint8Array(buffer);
 
-  
 
-            let content;
 
-  
 
-      
 
-  
 
-            try {
+      videoDiv.dataset.index = index;
 
-  
 
-              // 智能解码
 
-  
 
-              if (uint8array.length >= 3 && uint8array[0] === 0xEF && uint8array[1] === 0xBB && uint8array[2] === 0xBF) {
 
-  
 
-                content = new TextDecoder('utf-8').decode(uint8array.slice(3));
 
-  
 
-              } else {
 
-  
 
-                try {
 
-  
 
-                  content = new TextDecoder('utf-8', { fatal: true }).decode(uint8array);
 
-  
 
-                } catch (error) {
 
-  
+      const imagePreview = video.image
 
-                  content = new TextDecoder('gbk').decode(uint8array);
 
-  
 
-                }
 
-  
 
-              }
 
-  
 
-            } catch (error) {
-
-  
-
-              alert('文件解码失败，请确保您的CSV文件是 UTF-8 或 GBK 编码。');
-
-  
-
-              return;
-
-  
-
-            }
-
-  
-
-            
-
-  
-
-            const data = this._parseCSV(content);
-
-  
-
-      
-
-  
-
-            if (data.length <= 1) {
-
-  
-
-              alert('CSV文件为空或格式不正确。');
-
-  
-
-              return;
-
-  
-
-            }
-
-  
-
-      
-
-  
-
-            // 跳过表头处理数据
-
-  
-
-            data.slice(1).forEach(row => {
-
-  
-
-              if (row && row.length > 1) {
-
-  
-
-                const imagePrompt = row[1] ? row[1].trim() : '';
-
-  
-
-                const videoPrompt = row[2] ? row[2].trim() : '';
-
-  
-
-    
-
-  
-
-                if (imagePrompt) {
-
-  
-
-                  this.addStoryboard(imagePrompt);
-
-  
-
-                }
-
-  
-
-                if (videoPrompt) {
-
-  
-
-                  this.addVideo(videoPrompt);
-
-  
-
-                }
-
-  
-
-              }
-
-  
-
-            });
-
-  
-
-            
-
-  
-
-            this.updateAndRenderCharacters(); // 更新角色列表
-
-  
-
-            this.renderVideos(); // 渲染视频列表
-
-  
-
-          };
-
-  
-
-          reader.readAsArrayBuffer(file);
-
-  
-
-        }
-
-  
-
-      
-
-  
-
-        // 专业CSV解析器
-
-  
-
-        _parseCSV(str) {
-
-  
-
-          const result = [];
-
-  
-
-          let currentRow = [];
-
-  
-
-          let currentField = '';
-
-  
-
-          let inQuotedField = false;
-
-  
-
-      
-
-  
-
-          for (let i = 0; i < str.length; i++) {
-
-  
-
-            const char = str[i];
-
-  
-
-            const nextChar = str[i + 1];
-
-  
-
-      
-
-  
-
-            if (inQuotedField) {
-
-  
-
-              if (char === '"') {
-
-  
-
-                if (nextChar === '"') { // 处理转义引号 ""
-
-  
-
-                  currentField += '"';
-
-  
-
-                  i++; // 跳过下一个引号
-
-  
-
-                } else {
-
-  
-
-                  inQuotedField = false; // 引号字段结束
-
-  
-
-                }
-
-  
-
-              } else {
-
-  
-
-                currentField += char;
-
-  
-
-              }
-
-  
-
-            } else {
-
-  
-
-              if (char === '"') {
-
-  
-
-                inQuotedField = true;
-
-  
-
-              } else if (char === ',') {
-
-  
-
-                currentRow.push(currentField);
-
-  
-
-                currentField = '';
-
-  
-
-              } else if (char === '\n' || char === '\r') {
-
-  
-
-                currentRow.push(currentField);
-
-  
-
-                result.push(currentRow);
-
-  
-
-                currentRow = [];
-
-  
-
-                currentField = '';
-
-  
-
-                // 处理 Windows 的 \r\n
-
-  
-
-                if (char === '\r' && nextChar === '\n') {
-
-  
-
-                  i++;
-
-  
-
-                }
-
-  
-
-              } else {
-
-  
-
-                currentField += char;
-
-  
-
-              }
-
-  
-
-            }
-
-  
-
-          }
-
-  
-
-          // 添加最后一行
-
-  
-
-          if (currentField || currentRow.length > 0) {
-
-  
-
-            currentRow.push(currentField);
-
-  
-
-            result.push(currentRow);
-
-  
-
-          }
-
-  
-
-          
-
-  
-
-          // 清理可能因文件末尾换行符产生的空行
-
-  
-
-          if (result.length > 0 && result[result.length - 1].every(field => field === '')) {
-
-  
-
-            result.pop();
-
-  
-
-          }
-
-  
-
-      
-
-  
-
-          return result;
-
-  
-
-        }
-
-  
-
-    
-
-  
-
-        // ---- 视频列表功能 ----
-
-  
-
-    
-
-  
-
-            addVideo(promptText = '') {
-
-  
-
-    
-
-  
-
-              const video = {
-
-  
-
-    
-
-  
-
-                id: Date.now() + this.videos.length,
-
-  
-
-    
-
-  
-
-                name: `视频${this.videos.length + 1}`,
-
-  
-
-    
-
-  
-
-                image: null,
-
-  
-
-    
-
-  
-
-                prompt: promptText,
-
-  
-
-    
-
-  
-
-                status: 'pending' // pending, uploading, completed, failed
-
-  
-
-    
-
-  
-
-              };
-
-  
-
-    
-
-  
-
-              this.videos.push(video);
-
-  
-
-    
-
-  
-
-            }
-
-  
-
-    
-
-  
-
-        
-
-  
-
-    
-
-  
-
-            renderVideos() {
-
-  
-
-    
-
-  
-
-              const listContainer = document.getElementById('jbu-video-list');
-
-  
-
-    
-
-  
-
-              listContainer.innerHTML = '';
-
-  
-
-    
-
-  
-
-        
-
-  
-
-    
-
-  
-
-              if (this.videos.length === 0) {
-
-  
-
-    
-
-  
-
-                listContainer.innerHTML = '<p class="jbu-no-items">暂无视频任务，请通过"导入提示词"添加。</p>';
-
-  
-
-    
-
-  
-
-                return;
-
-  
-
-    
-
-  
-
-              }
-
-  
-
-    
-
-  
-
-        
-
-  
-
-    
-
-  
-
-              this.videos.forEach((video, index) => {
-
-  
-
-    
-
-  
-
-                const videoDiv = document.createElement('div');
-
-  
-
-    
-
-  
-
-                videoDiv.className = `jbu-storyboard ${video.status}`; // 使用jbu-storyboard样式
-
-  
-
-    
-
-  
-
-                videoDiv.draggable = true; // 允许拖拽
-
-  
-
-    
-
-  
-
-                videoDiv.dataset.index = index;
-
-  
-
-    
-
-  
-
-                
-
-  
-
-    
-
-  
-
-                const imagePreview = video.image
-
-  
-
-    
-
-  
-
-                  ? `<div class="jbu-image-preview">
+        ? `<div class="jbu-image-preview">
 
   
 
@@ -1113,29 +632,29 @@ class JimengBatchUploader {
 
                     </div>`
 
-  
 
-    
 
-  
 
-                  : `<div class="jbu-image-preview jbu-image-placeholder"></div>`;
 
-  
 
-    
 
-  
+        : `<div class="jbu-image-preview jbu-image-placeholder"></div>`;
 
-        
 
-  
 
-    
 
-  
 
-                videoDiv.innerHTML = `
+
+
+
+
+
+
+
+
+
+
+      videoDiv.innerHTML = `
 
   
 
@@ -1241,1245 +760,1245 @@ class JimengBatchUploader {
 
                 `;
 
-  
 
-    
 
-  
 
-                listContainer.appendChild(videoDiv);
 
-  
 
-    
 
-  
+      listContainer.appendChild(videoDiv);
 
-              });
 
-  
 
-    
 
-  
 
-        
 
-  
 
-    
+    });
 
-  
 
-              this.bindVideoEvents();
 
-  
 
-    
 
-  
 
-              this.setupVideoDragAndDrop(); // 添加视频拖拽
 
-  
 
-    
 
-  
 
-            }
 
-  
 
-    
 
-  
 
-        
 
-  
+    this.bindVideoEvents();
 
-    
 
-  
 
-            bindVideoEvents() {
 
-  
 
-    
 
-  
 
-              // 添加图片按钮
+    this.setupVideoDragAndDrop(); // 添加视频拖拽
 
-  
 
-    
 
-  
 
-              document.querySelectorAll('#jbu-video-list .jbu-add-image').forEach(btn => {
 
-  
 
-    
 
-  
+  }
 
-                btn.addEventListener('click', (e) => {
 
-  
 
-    
 
-  
 
-                  const id = parseInt(e.target.dataset.id);
 
-  
 
-    
 
-  
 
-                  this.addImageToVideo(id);
 
-  
 
-    
 
-  
 
-                });
 
-  
 
-    
+  bindVideoEvents() {
 
-  
 
-              });
 
-  
 
-    
 
-  
 
-        
 
-  
+    // 添加图片按钮
 
-    
 
-  
 
-              // 删除图片按钮
 
-  
 
-    
 
-  
 
-              document.querySelectorAll('#jbu-video-list .jbu-remove-image').forEach(btn => {
+    document.querySelectorAll('#jbu-video-list .jbu-add-image').forEach(btn => {
 
-  
 
-    
 
-  
 
-                btn.addEventListener('click', (e) => {
 
-  
 
-    
 
-  
+      btn.addEventListener('click', (e) => {
 
-                  const id = parseInt(e.target.dataset.id);
 
-  
 
-    
 
-  
 
-                  this.removeImageFromVideo(id);
 
-  
 
-    
+        const id = parseInt(e.target.dataset.id);
 
-  
 
-                });
 
-  
 
-    
 
-  
 
-              });
 
-  
+        this.addImageToVideo(id);
 
-    
 
-  
 
-        
 
-  
 
-    
 
-  
-
-              // 更新提示词
-
-  
-
-    
-
-  
-
-              document.querySelectorAll('#jbu-video-list .jbu-prompt').forEach(textarea => {
-
-  
-
-    
-
-  
-
-                textarea.addEventListener('input', (e) => {
-
-  
-
-    
-
-  
-
-                  const id = parseInt(e.target.dataset.id);
-
-  
-
-    
-
-  
-
-                  const video = this.videos.find(v => v.id === id);
-
-  
-
-    
-
-  
-
-                  if (video) {
-
-  
-
-    
-
-  
-
-                    video.prompt = e.target.value;
-
-  
-
-    
-
-  
-
-                  }
-
-  
-
-    
-
-  
-
-                });
-
-  
-
-    
-
-  
-
-              });
-
-  
-
-    
-
-  
-
-        
-
-  
-
-    
-
-  
-
-              // 删除视频
-
-  
-
-    
-
-  
-
-              document.querySelectorAll('.jbu-delete-video').forEach(btn => {
-
-  
-
-    
-
-  
-
-                btn.addEventListener('click', (e) => {
-
-  
-
-    
-
-  
-
-                  const id = parseInt(e.target.dataset.id);
-
-  
-
-    
-
-  
-
-                  this.videos = this.videos.filter(v => v.id !== id);
-
-  
-
-    
-
-  
-
-                  this.reorderVideos(); // 重新排序视频名称
-
-  
-
-    
-
-  
-
-                  this.renderVideos();
-
-  
-
-    
-
-  
-
-                });
-
-  
-
-    
-
-  
-
-              });
-
-  
-
-    
-
-  
-
-            }
-
-  
-
-    
-
-  
-
-        
-
-  
-
-    
-
-  
-
-            setupVideoDragAndDrop() {
-
-  
-
-    
-
-  
-
-              const listContainer = document.getElementById('jbu-video-list');
-
-  
-
-    
-
-  
-
-              let draggedElement = null;
-
-  
-
-    
-
-  
-
-          
-
-  
-
-    
-
-  
-
-              listContainer.addEventListener('dragstart', (e) => {
-
-  
-
-    
-
-  
-
-                draggedElement = e.target;
-
-  
-
-    
-
-  
-
-                e.target.style.opacity = '0.5';
-
-  
-
-    
-
-  
-
-              });
-
-  
-
-    
-
-  
-
-          
-
-  
-
-    
-
-  
-
-              listContainer.addEventListener('dragend', (e) => {
-
-  
-
-    
-
-  
-
-                e.target.style.opacity = '';
-
-  
-
-    
-
-  
-
-                draggedElement = null;
-
-  
-
-    
-
-  
-
-              });
-
-  
-
-    
-
-  
-
-          
-
-  
-
-    
-
-  
-
-              listContainer.addEventListener('dragover', (e) => {
-
-  
-
-    
-
-  
-
-                e.preventDefault();
-
-  
-
-    
-
-  
-
-              });
-
-  
-
-    
-
-  
-
-          
-
-  
-
-    
-
-  
-
-              listContainer.addEventListener('drop', (e) => {
-
-  
-
-    
-
-  
-
-                e.preventDefault();
-
-  
-
-    
-
-  
-
-                if (draggedElement && e.target.classList.contains('jbu-storyboard')) {
-
-  
-
-    
-
-  
-
-                  const fromIndex = parseInt(draggedElement.dataset.index);
-
-  
-
-    
-
-  
-
-                  const toIndex = parseInt(e.target.dataset.index);
-
-  
-
-    
-
-  
-
-                  
-
-  
-
-    
-
-  
-
-                  // 重新排序数组
-
-  
-
-    
-
-  
-
-                  const item = this.videos.splice(fromIndex, 1)[0];
-
-  
-
-    
-
-  
-
-                  this.videos.splice(toIndex, 0, item);
-
-  
-
-    
-
-  
-
-                  
-
-  
-
-    
-
-  
-
-                  this.renderVideos();
-
-  
-
-    
-
-  
-
-                }
-
-  
-
-    
-
-  
-
-              });
-
-  
-
-    
-
-  
-
-            }
-
-  
-
-    
-
-  
-
-        
-
-  
-
-    
-
-  
-
-            reorderVideos() {
-
-  
-
-    
-
-  
-
-              this.videos.forEach((video, index) => {
-
-  
-
-    
-
-  
-
-                video.name = `视频${index + 1}`;
-
-  
-
-    
-
-  
-
-              });
-
-  
-
-    
-
-  
-
-            }
-
-  
-
-    
-
-  
-
-        
-
-  
-
-    
-
-  
-
-            handleVideoBatchImport(files) {
-
-  
-
-    
-
-  
-
-              Array.from(files).forEach((file, index) => {
-
-  
-
-    
-
-  
-
-                if (index < this.videos.length) {
-
-  
-
-    
-
-  
-
-                  this.videos[index].image = file;
-
-  
-
-    
-
-  
-
-                }
-
-  
-
-    
-
-  
-
-              });
-
-  
-
-    
-
-  
-
-              this.renderVideos();
-
-  
-
-    
-
-  
-
-            }
-
-  
-
-    
-
-  
-
-        
-
-  
-
-    
-
-  
-
-            addImageToVideo(videoId) {
-
-  
-
-    
-
-  
-
-              const fileInput = document.createElement('input');
-
-  
-
-    
-
-  
-
-              fileInput.type = 'file';
-
-  
-
-    
-
-  
-
-              fileInput.accept = 'image/*';
-
-  
-
-    
-
-  
-
-              fileInput.style.display = 'none';
-
-  
-
-    
-
-  
-
-              
-
-  
-
-    
-
-  
-
-              fileInput.addEventListener('change', (e) => {
-
-  
-
-    
-
-  
-
-                const file = e.target.files[0];
-
-  
-
-    
-
-  
-
-                const video = this.videos.find(v => v.id === videoId);
-
-  
-
-    
-
-  
-
-                if (video && file) {
-
-  
-
-    
-
-  
-
-                  video.image = file;
-
-  
-
-    
-
-  
-
-                  this.renderVideos();
-
-  
-
-    
-
-  
-
-                }
-
-  
-
-    
-
-  
-
-                document.body.removeChild(fileInput);
-
-  
-
-    
-
-  
-
-              });
-
-  
-
-    
-
-  
-
-              
-
-  
-
-    
-
-  
-
-              document.body.appendChild(fileInput);
-
-  
-
-    
-
-  
-
-              fileInput.click();
-
-  
-
-    
-
-  
-
-            }
-
-  
-
-    
-
-  
-
-        
-
-  
-
-    
-
-  
-
-            removeImageFromVideo(videoId) {
-
-  
-
-    
-
-  
-
-              const video = this.videos.find(v => v.id === videoId);
-
-  
-
-    
-
-  
-
-              if (video) {
-
-  
-
-    
-
-  
-
-                video.image = null;
-
-  
-
-    
-
-  
-
-                this.renderVideos();
-
-  
-
-    
-
-  
-
-              }
-
-  
-
-    
-
-  
-
-            }
-
-  
-
-    
-
-  
-
-        
-
-  
-
-    
-
-  
-
-            clearVideos() {
-
-  
-
-    
-
-  
-
-              if (confirm('确定要清空所有视频任务吗？')) {
-
-  
-
-    
-
-  
-
-                this.videos = [];
-
-  
-
-    
-
-  
-
-                this.renderVideos();
-
-  
-
-    
-
-  
-
-              }
-
-  
-
-    
-
-  
-
-            }
-
-  
-
-    
-
-  
-
-          
-
-  
-
-    
-
-  
-
-            // ---- END 视频列表功能 ----
-
-  
-
-    
-
-  
-
-          
-
-  
-
-    
-
-  
-
-            // ---- 角色列表功能 ----
-
-  
-
-    // 从所有分镜中更新角色列表并渲染
-
-    updateAndRenderCharacters() {
-
-      const allPrompts = this.storyboards.map(s => s.prompt);
-
-      const characterNames = new Set();
-
-  
-
-      allPrompts.forEach(prompt => {
-
-        const extracted = this._extractCharactersFromPrompt(prompt);
-
-        extracted.forEach(name => characterNames.add(name));
 
       });
 
-  
 
-      // 更新 this.characters 数组，保留已有图片
 
-      const newCharacters = [];
 
-      characterNames.forEach(name => {
 
-        const existing = this.characters.find(c => c.name === name);
 
-        if (existing) {
 
-          newCharacters.push(existing);
+    });
 
-        } else {
 
-          newCharacters.push({ name, image: null });
+
+
+
+
+
+
+
+
+
+
+
+
+
+    // 删除图片按钮
+
+
+
+
+
+
+
+    document.querySelectorAll('#jbu-video-list .jbu-remove-image').forEach(btn => {
+
+
+
+
+
+
+
+      btn.addEventListener('click', (e) => {
+
+
+
+
+
+
+
+        const id = parseInt(e.target.dataset.id);
+
+
+
+
+
+
+
+        this.removeImageFromVideo(id);
+
+
+
+
+
+
+
+      });
+
+
+
+
+
+
+
+    });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    // 更新提示词
+
+
+
+
+
+
+
+    document.querySelectorAll('#jbu-video-list .jbu-prompt').forEach(textarea => {
+
+
+
+
+
+
+
+      textarea.addEventListener('input', (e) => {
+
+
+
+
+
+
+
+        const id = parseInt(e.target.dataset.id);
+
+
+
+
+
+
+
+        const video = this.videos.find(v => v.id === id);
+
+
+
+
+
+
+
+        if (video) {
+
+
+
+
+
+
+
+          video.prompt = e.target.value;
+
+
+
+
+
+
 
         }
 
+
+
+
+
+
+
       });
 
-      this.characters = newCharacters;
 
-      
 
-      this.renderCharacters();
+
+
+
+
+    });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    // 删除视频
+
+
+
+
+
+
+
+    document.querySelectorAll('.jbu-delete-video').forEach(btn => {
+
+
+
+
+
+
+
+      btn.addEventListener('click', (e) => {
+
+
+
+
+
+
+
+        const id = parseInt(e.target.dataset.id);
+
+
+
+
+
+
+
+        this.videos = this.videos.filter(v => v.id !== id);
+
+
+
+
+
+
+
+        this.reorderVideos(); // 重新排序视频名称
+
+
+
+
+
+
+
+        this.renderVideos();
+
+
+
+
+
+
+
+      });
+
+
+
+
+
+
+
+    });
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  setupVideoDragAndDrop() {
+
+
+
+
+
+
+
+    const listContainer = document.getElementById('jbu-video-list');
+
+
+
+
+
+
+
+    let draggedElement = null;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    listContainer.addEventListener('dragstart', (e) => {
+
+
+
+
+
+
+
+      draggedElement = e.target;
+
+
+
+
+
+
+
+      e.target.style.opacity = '0.5';
+
+
+
+
+
+
+
+    });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    listContainer.addEventListener('dragend', (e) => {
+
+
+
+
+
+
+
+      e.target.style.opacity = '';
+
+
+
+
+
+
+
+      draggedElement = null;
+
+
+
+
+
+
+
+    });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    listContainer.addEventListener('dragover', (e) => {
+
+
+
+
+
+
+
+      e.preventDefault();
+
+
+
+
+
+
+
+    });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    listContainer.addEventListener('drop', (e) => {
+
+
+
+
+
+
+
+      e.preventDefault();
+
+
+
+
+
+
+
+      if (draggedElement && e.target.classList.contains('jbu-storyboard')) {
+
+
+
+
+
+
+
+        const fromIndex = parseInt(draggedElement.dataset.index);
+
+
+
+
+
+
+
+        const toIndex = parseInt(e.target.dataset.index);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        // 重新排序数组
+
+
+
+
+
+
+
+        const item = this.videos.splice(fromIndex, 1)[0];
+
+
+
+
+
+
+
+        this.videos.splice(toIndex, 0, item);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        this.renderVideos();
+
+
+
+
+
+
+
+      }
+
+
+
+
+
+
+
+    });
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  reorderVideos() {
+
+
+
+
+
+
+
+    this.videos.forEach((video, index) => {
+
+
+
+
+
+
+
+      video.name = `视频${index + 1}`;
+
+
+
+
+
+
+
+    });
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  handleVideoBatchImport(files) {
+
+
+
+
+
+
+
+    Array.from(files).forEach((file, index) => {
+
+
+
+
+
+
+
+      if (index < this.videos.length) {
+
+
+
+
+
+
+
+        this.videos[index].image = file;
+
+
+
+
+
+
+
+      }
+
+
+
+
+
+
+
+    });
+
+
+
+
+
+
+
+    this.renderVideos();
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  addImageToVideo(videoId) {
+
+
+
+
+
+
+
+    const fileInput = document.createElement('input');
+
+
+
+
+
+
+
+    fileInput.type = 'file';
+
+
+
+
+
+
+
+    fileInput.accept = 'image/*';
+
+
+
+
+
+
+
+    fileInput.style.display = 'none';
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    fileInput.addEventListener('change', (e) => {
+
+
+
+
+
+
+
+      const file = e.target.files[0];
+
+
+
+
+
+
+
+      const video = this.videos.find(v => v.id === videoId);
+
+
+
+
+
+
+
+      if (video && file) {
+
+
+
+
+
+
+
+        video.image = file;
+
+
+
+
+
+
+
+        this.renderVideos();
+
+
+
+
+
+
+
+      }
+
+
+
+
+
+
+
+      document.body.removeChild(fileInput);
+
+
+
+
+
+
+
+    });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    document.body.appendChild(fileInput);
+
+
+
+
+
+
+
+    fileInput.click();
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  removeImageFromVideo(videoId) {
+
+
+
+
+
+
+
+    const video = this.videos.find(v => v.id === videoId);
+
+
+
+
+
+
+
+    if (video) {
+
+
+
+
+
+
+
+      video.image = null;
+
+
+
+
+
+
+
+      this.renderVideos();
+
+
+
+
+
+
 
     }
 
-  
 
-      // 从单个提示词中提取角色名称
 
-  
 
-      _extractCharactersFromPrompt(prompt) {
 
-  
 
-        if (!prompt) return [];
 
-  
+  }
 
-        
 
-  
 
-        const characters = [];
 
-  
 
-        const roleMatch = prompt.match(/角色:\s*([^;]+)/);
 
-  
 
-        if (!roleMatch || !roleMatch[1]) return [];
 
-  
 
-    
 
-  
 
-        const charactersBlock = roleMatch[1];
 
-  
 
-        const characterParts = charactersBlock.split('*');
 
-  
 
-    
+  clearVideos() {
 
-  
 
-        characterParts.forEach(part => {
 
-  
 
-          const openParenIndex = part.indexOf('(');
 
-  
 
-          if (openParenIndex > 0) { // 确保括号前有内容
 
-  
+    if (confirm('确定要清空所有视频任务吗？')) {
 
-            const potentialName = part.substring(0, openParenIndex).trim();
 
-  
 
-            if (potentialName) {
 
-  
 
-              characters.push(potentialName);
 
-  
 
-            }
+      this.videos = [];
 
-  
 
-          }
 
-  
 
-        });
 
-  
 
-    
 
-  
+      this.renderVideos();
 
-        return characters;
 
-  
+
+
+
+
+
+    }
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  // ---- END 视频列表功能 ----
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  // ---- 角色列表功能 ----
+
+
+
+  // 从所有分镜中更新角色列表并渲染
+
+  updateAndRenderCharacters() {
+
+    const allPrompts = this.storyboards.map(s => s.prompt);
+
+    const characterNames = new Set();
+
+
+
+    allPrompts.forEach(prompt => {
+
+      const extracted = this._extractCharactersFromPrompt(prompt);
+
+      extracted.forEach(name => characterNames.add(name));
+
+    });
+
+
+
+    // 更新 this.characters 数组，保留已有图片
+
+    const newCharacters = [];
+
+    characterNames.forEach(name => {
+
+      const existing = this.characters.find(c => c.name === name);
+
+      if (existing) {
+
+        newCharacters.push(existing);
+
+      } else {
+
+        newCharacters.push({ name, image: null });
 
       }
 
-  
+    });
 
-    // 渲染角色列表UI
+    this.characters = newCharacters;
 
-    renderCharacters() {
 
-      const listContainer = document.getElementById('jbu-character-list');
 
-      if (!listContainer) return;
+    this.renderCharacters();
 
-      listContainer.innerHTML = '';
+  }
 
-  
 
-      if (this.characters.length === 0) {
 
-        listContainer.innerHTML = '<p class="jbu-no-characters">暂无角色，请在分镜提示词中按 "角色: 名称 (描述)" 格式添加。</p>';
+  // 从单个提示词中提取角色名称
 
-        return;
+
+
+  _extractCharactersFromPrompt(prompt) {
+
+
+
+    if (!prompt) return [];
+
+
+
+
+
+
+
+    const characters = [];
+
+
+
+    const roleMatch = prompt.match(/角色:\s*([^;]+)/);
+
+
+
+    if (!roleMatch || !roleMatch[1]) return [];
+
+
+
+
+
+
+
+    const charactersBlock = roleMatch[1];
+
+
+
+    const characterParts = charactersBlock.split('*');
+
+
+
+
+
+
+
+    characterParts.forEach(part => {
+
+
+
+      const openParenIndex = part.indexOf('(');
+
+
+
+      if (openParenIndex > 0) { // 确保括号前有内容
+
+
+
+        const potentialName = part.substring(0, openParenIndex).trim();
+
+
+
+        if (potentialName) {
+
+
+
+          characters.push(potentialName);
+
+
+
+        }
+
+
 
       }
 
-  
 
-      this.characters.forEach(char => {
 
-        const charDiv = document.createElement('div');
+    });
 
-        charDiv.className = 'jbu-character-item';
 
-        
 
-        const imagePreview = char.image 
 
-          ? `<img src="${URL.createObjectURL(char.image)}" alt="${char.name}预览">`
 
-          : '<div class="jbu-image-placeholder"></div>';
 
-  
 
-        charDiv.innerHTML = `
+    return characters;
+
+
+
+  }
+
+
+
+  // 渲染角色列表UI
+
+  renderCharacters() {
+
+    const listContainer = document.getElementById('jbu-character-list');
+
+    if (!listContainer) return;
+
+    listContainer.innerHTML = '';
+
+
+
+    if (this.characters.length === 0) {
+
+      listContainer.innerHTML = '<p class="jbu-no-characters">暂无角色，请在分镜提示词中按 "角色: 名称 (描述)" 格式添加。</p>';
+
+      return;
+
+    }
+
+
+
+    this.characters.forEach(char => {
+
+      const charDiv = document.createElement('div');
+
+      charDiv.className = 'jbu-character-item';
+
+
+
+      const imagePreview = char.image
+
+        ? `<img src="${URL.createObjectURL(char.image)}" alt="${char.name}预览">`
+
+        : '<div class="jbu-image-placeholder"></div>';
+
+
+
+      charDiv.innerHTML = `
 
           <div class="jbu-character-img-preview">
 
@@ -2499,255 +2018,255 @@ class JimengBatchUploader {
 
         `;
 
-        listContainer.appendChild(charDiv);
+      listContainer.appendChild(charDiv);
 
-      });
+    });
 
-  
 
-      this._bindCharacterEvents();
 
-    }
+    this._bindCharacterEvents();
 
-  
+  }
 
-    // 绑定角色列表的事件
 
-    _bindCharacterEvents() {
 
-      document.querySelectorAll('.jbu-upload-char-image').forEach(btn => {
+  // 绑定角色列表的事件
 
-        btn.addEventListener('click', (e) => {
+  _bindCharacterEvents() {
 
-          const name = e.target.dataset.name;
+    document.querySelectorAll('.jbu-upload-char-image').forEach(btn => {
 
-          
+      btn.addEventListener('click', (e) => {
 
-          const fileInput = document.createElement('input');
+        const name = e.target.dataset.name;
 
-          fileInput.type = 'file';
 
-          fileInput.accept = 'image/*';
 
-          fileInput.style.display = 'none';
+        const fileInput = document.createElement('input');
 
-          
+        fileInput.type = 'file';
 
-          fileInput.addEventListener('change', (event) => {
+        fileInput.accept = 'image/*';
 
-            this.handleCharacterImageUpload(event, name);
+        fileInput.style.display = 'none';
 
-            document.body.removeChild(fileInput);
 
-          });
 
-          
+        fileInput.addEventListener('change', (event) => {
 
-          document.body.appendChild(fileInput);
+          this.handleCharacterImageUpload(event, name);
 
-          fileInput.click();
+          document.body.removeChild(fileInput);
 
         });
 
-      });
 
-  
 
-      document.querySelectorAll('.jbu-remove-char-image').forEach(btn => {
+        document.body.appendChild(fileInput);
 
-        btn.addEventListener('click', (e) => {
-
-          const name = e.target.dataset.name;
-
-          this.removeCharacterImage(name);
-
-        });
+        fileInput.click();
 
       });
 
-    }
+    });
 
-  
 
-    // 处理角色图片上传
 
-    handleCharacterImageUpload(e, characterName) {
+    document.querySelectorAll('.jbu-remove-char-image').forEach(btn => {
 
-      const file = e.target.files[0];
+      btn.addEventListener('click', (e) => {
 
-      if (!file) return;
+        const name = e.target.dataset.name;
 
-  
-
-      const character = this.characters.find(c => c.name === characterName);
-
-      if (character) {
-
-        character.image = file;
-
-        this.renderCharacters();
-
-      }
-
-    }
-
-  
-
-    // 删除角色图片
-
-    removeCharacterImage(characterName) {
-
-      const character = this.characters.find(c => c.name === characterName);
-
-      if (character) {
-
-        character.image = null;
-
-        this.renderCharacters();
-
-      }
-
-    }
-
-  
-
-    // ---- END 角色列表功能 ----
-
-  
-
-    // 批量导入图片
-
-    handleBatchImport(files) {
-
-      const startIndex = this.storyboards.length; // 记录开始索引
-
-      Array.from(files).forEach((file, index) => {
-
-        const storyboard = {
-
-          id: Date.now() + index,
-
-          name: `分镜${startIndex + index + 1}`, // 修正分镜编号逻辑
-
-          images: [file], // 每个分镜对应一张图片
-
-          prompt: '',
-
-          status: 'pending'
-
-        };
-
-        this.storyboards.push(storyboard);
+        this.removeCharacterImage(name);
 
       });
 
-      this.renderStoryboards();
+    });
+
+  }
+
+
+
+  // 处理角色图片上传
+
+  handleCharacterImageUpload(e, characterName) {
+
+    const file = e.target.files[0];
+
+    if (!file) return;
+
+
+
+    const character = this.characters.find(c => c.name === characterName);
+
+    if (character) {
+
+      character.image = file;
+
+      this.renderCharacters();
 
     }
 
-  
+  }
 
-    // 为分镜添加图片
 
-    addImageToStoryboard(storyboardId) {
 
-      // 创建临时文件输入框
+  // 删除角色图片
 
-      const fileInput = document.createElement('input');
+  removeCharacterImage(characterName) {
 
-      fileInput.type = 'file';
+    const character = this.characters.find(c => c.name === characterName);
 
-      fileInput.accept = 'image/*';
+    if (character) {
 
-      fileInput.multiple = true;
+      character.image = null;
 
-      fileInput.style.display = 'none';
-
-      
-
-      fileInput.addEventListener('change', (e) => {
-
-        const files = Array.from(e.target.files);
-
-        const storyboard = this.storyboards.find(s => s.id === storyboardId);
-
-        
-
-        if (storyboard && files.length > 0) {
-
-          // 限制最多4张图片
-
-          const remainingSlots = 4 - storyboard.images.length;
-
-          const filesToAdd = files.slice(0, remainingSlots);
-
-          
-
-          storyboard.images.push(...filesToAdd);
-
-          this.renderStoryboards();
-
-        }
-
-        
-
-        // 清理临时元素
-
-        document.body.removeChild(fileInput);
-
-      });
-
-      
-
-      document.body.appendChild(fileInput);
-
-      fileInput.click();
+      this.renderCharacters();
 
     }
 
-  
+  }
 
-    // 从分镜中删除图片
 
-    removeImageFromStoryboard(storyboardId, imageIndex) {
+
+  // ---- END 角色列表功能 ----
+
+
+
+  // 批量导入图片
+
+  handleBatchImport(files) {
+
+    const startIndex = this.storyboards.length; // 记录开始索引
+
+    Array.from(files).forEach((file, index) => {
+
+      const storyboard = {
+
+        id: Date.now() + index,
+
+        name: `分镜${startIndex + index + 1}`, // 修正分镜编号逻辑
+
+        images: [file], // 每个分镜对应一张图片
+
+        prompt: '',
+
+        status: 'pending'
+
+      };
+
+      this.storyboards.push(storyboard);
+
+    });
+
+    this.renderStoryboards();
+
+  }
+
+
+
+  // 为分镜添加图片
+
+  addImageToStoryboard(storyboardId) {
+
+    // 创建临时文件输入框
+
+    const fileInput = document.createElement('input');
+
+    fileInput.type = 'file';
+
+    fileInput.accept = 'image/*';
+
+    fileInput.multiple = true;
+
+    fileInput.style.display = 'none';
+
+
+
+    fileInput.addEventListener('change', (e) => {
+
+      const files = Array.from(e.target.files);
 
       const storyboard = this.storyboards.find(s => s.id === storyboardId);
 
-      if (storyboard && storyboard.images[imageIndex]) {
 
-        storyboard.images.splice(imageIndex, 1);
+
+      if (storyboard && files.length > 0) {
+
+        // 限制最多4张图片
+
+        const remainingSlots = 4 - storyboard.images.length;
+
+        const filesToAdd = files.slice(0, remainingSlots);
+
+
+
+        storyboard.images.push(...filesToAdd);
 
         this.renderStoryboards();
 
       }
 
+
+
+      // 清理临时元素
+
+      document.body.removeChild(fileInput);
+
+    });
+
+
+
+    document.body.appendChild(fileInput);
+
+    fileInput.click();
+
+  }
+
+
+
+  // 从分镜中删除图片
+
+  removeImageFromStoryboard(storyboardId, imageIndex) {
+
+    const storyboard = this.storyboards.find(s => s.id === storyboardId);
+
+    if (storyboard && storyboard.images[imageIndex]) {
+
+      storyboard.images.splice(imageIndex, 1);
+
+      this.renderStoryboards();
+
     }
 
-  
+  }
 
-    // 渲染分镜列表
 
-    renderStoryboards() {
 
-      const listContainer = document.getElementById('jbu-storyboard-list');
+  // 渲染分镜列表
 
-      listContainer.innerHTML = '';
+  renderStoryboards() {
 
-  
+    const listContainer = document.getElementById('jbu-storyboard-list');
 
-      this.storyboards.forEach((storyboard, index) => {
+    listContainer.innerHTML = '';
 
-        const storyboardDiv = document.createElement('div');
 
-        storyboardDiv.className = `jbu-storyboard ${storyboard.status}`;
 
-        storyboardDiv.draggable = true;
+    this.storyboards.forEach((storyboard, index) => {
 
-        storyboardDiv.dataset.index = index;
+      const storyboardDiv = document.createElement('div');
 
-        
+      storyboardDiv.className = `jbu-storyboard ${storyboard.status}`;
 
-        storyboardDiv.innerHTML = `
+      storyboardDiv.draggable = true;
+
+      storyboardDiv.dataset.index = index;
+
+
+
+      storyboardDiv.innerHTML = `
 
           <div class="jbu-storyboard-header">
 
@@ -2785,647 +2304,299 @@ class JimengBatchUploader {
 
         `;
 
-  
 
-        listContainer.appendChild(storyboardDiv);
 
-      });
+      listContainer.appendChild(storyboardDiv);
 
-  
+    });
 
-      this.bindStoryboardEvents();
 
-    }
 
-  
+    this.bindStoryboardEvents();
 
-    // 绑定分镜相关事件
+  }
 
-    bindStoryboardEvents() {
 
-      // 删除分镜
 
-      document.querySelectorAll('.jbu-delete-storyboard').forEach(btn => {
+  // 绑定分镜相关事件
 
-        btn.addEventListener('click', (e) => {
+  bindStoryboardEvents() {
 
-          const id = parseInt(e.target.dataset.id);
+    // 删除分镜
 
-          this.storyboards = this.storyboards.filter(s => s.id !== id);
+    document.querySelectorAll('.jbu-delete-storyboard').forEach(btn => {
 
-          this.reorderStoryboards(); // 重新排序分镜名称
+      btn.addEventListener('click', (e) => {
 
-          this.renderStoryboards();
+        const id = parseInt(e.target.dataset.id);
 
-          this.updateAndRenderCharacters(); // 更新角色列表
+        this.storyboards = this.storyboards.filter(s => s.id !== id);
 
-        });
+        this.reorderStoryboards(); // 重新排序分镜名称
+
+        this.renderStoryboards();
+
+        this.updateAndRenderCharacters(); // 更新角色列表
 
       });
 
-  
+    });
 
-      // 添加图片按钮
 
-      document.querySelectorAll('.jbu-add-image').forEach(btn => {
 
-        btn.addEventListener('click', (e) => {
+    // 添加图片按钮
 
-          const id = parseInt(e.target.dataset.id);
+    document.querySelectorAll('.jbu-add-image').forEach(btn => {
 
-          this.addImageToStoryboard(id);
+      btn.addEventListener('click', (e) => {
 
-        });
+        const id = parseInt(e.target.dataset.id);
 
-      });
-
-  
-
-      // 删除图片按钮
-
-      document.querySelectorAll('.jbu-remove-image').forEach(btn => {
-
-        btn.addEventListener('click', (e) => {
-
-          const storyboardId = parseInt(e.target.dataset.storyboardId);
-
-          const imageIndex = parseInt(e.target.dataset.imageIndex);
-
-          this.removeImageFromStoryboard(storyboardId, imageIndex);
-
-        });
+        this.addImageToStoryboard(id);
 
       });
 
-  
+    });
 
-      // 更新提示词
 
-      document.querySelectorAll('.jbu-prompt').forEach(textarea => {
 
-        textarea.addEventListener('input', (e) => {
+    // 删除图片按钮
 
-          const id = parseInt(e.target.dataset.id);
+    document.querySelectorAll('.jbu-remove-image').forEach(btn => {
 
-          const storyboard = this.storyboards.find(s => s.id === id);
+      btn.addEventListener('click', (e) => {
 
-          if (storyboard) {
+        const storyboardId = parseInt(e.target.dataset.storyboardId);
 
-            storyboard.prompt = e.target.value;
+        const imageIndex = parseInt(e.target.dataset.imageIndex);
 
-          }
-
-          this.updateAndRenderCharacters(); // 实时更新角色列表
-
-        });
+        this.removeImageFromStoryboard(storyboardId, imageIndex);
 
       });
 
-  
+    });
 
-      // 拖拽排序
 
-      this.setupDragAndDrop();
 
-    }
+    // 更新提示词
 
-  
+    document.querySelectorAll('.jbu-prompt').forEach(textarea => {
 
-    // 设置拖拽排序
+      textarea.addEventListener('input', (e) => {
 
-    setupDragAndDrop() {
+        const id = parseInt(e.target.dataset.id);
 
-      const listContainer = document.getElementById('jbu-storyboard-list');
+        const storyboard = this.storyboards.find(s => s.id === id);
 
-      let draggedElement = null;
+        if (storyboard) {
 
-  
-
-      listContainer.addEventListener('dragstart', (e) => {
-
-        draggedElement = e.target;
-
-        e.target.style.opacity = '0.5';
-
-      });
-
-  
-
-      listContainer.addEventListener('dragend', (e) => {
-
-        e.target.style.opacity = '';
-
-        draggedElement = null;
-
-        this.updateAndRenderCharacters(); // 拖拽结束后也更新一下
-
-      });
-
-  
-
-      listContainer.addEventListener('dragover', (e) => {
-
-        e.preventDefault();
-
-      });
-
-  
-
-      listContainer.addEventListener('drop', (e) => {
-
-        e.preventDefault();
-
-        if (draggedElement && e.target.classList.contains('jbu-storyboard')) {
-
-          const fromIndex = parseInt(draggedElement.dataset.index);
-
-          const toIndex = parseInt(e.target.dataset.index);
-
-          
-
-          // 重新排序数组
-
-          const item = this.storyboards.splice(fromIndex, 1)[0];
-
-          this.storyboards.splice(toIndex, 0, item);
-
-          
-
-          this.renderStoryboards();
+          storyboard.prompt = e.target.value;
 
         }
 
+        this.updateAndRenderCharacters(); // 实时更新角色列表
+
       });
+
+    });
+
+
+
+    // 拖拽排序
+
+    this.setupDragAndDrop();
+
+  }
+
+
+
+  // 设置拖拽排序
+
+  setupDragAndDrop() {
+
+    const listContainer = document.getElementById('jbu-storyboard-list');
+
+    let draggedElement = null;
+
+
+
+    listContainer.addEventListener('dragstart', (e) => {
+
+      draggedElement = e.target;
+
+      e.target.style.opacity = '0.5';
+
+    });
+
+
+
+    listContainer.addEventListener('dragend', (e) => {
+
+      e.target.style.opacity = '';
+
+      draggedElement = null;
+
+      this.updateAndRenderCharacters(); // 拖拽结束后也更新一下
+
+    });
+
+
+
+    listContainer.addEventListener('dragover', (e) => {
+
+      e.preventDefault();
+
+    });
+
+
+
+    listContainer.addEventListener('drop', (e) => {
+
+      e.preventDefault();
+
+      if (draggedElement && e.target.classList.contains('jbu-storyboard')) {
+
+        const fromIndex = parseInt(draggedElement.dataset.index);
+
+        const toIndex = parseInt(e.target.dataset.index);
+
+
+
+        // 重新排序数组
+
+        const item = this.storyboards.splice(fromIndex, 1)[0];
+
+        this.storyboards.splice(toIndex, 0, item);
+
+
+
+        this.renderStoryboards();
+
+      }
+
+    });
+
+  }
+
+
+
+  // 开始上传
+
+  async startUpload() {
+
+    // 检查是否选择了“图片生成”
+
+    const modeElement = document.querySelector('div[class^="dimension-layout-"] div[class^="toolbar-settings-"] .lv-select-view .lv-select-view-value');
+
+    if (!modeElement || !modeElement.textContent.includes('图片生成')) {
+
+      alert('请先在即梦输入框底部工具栏手动选择“图片生成”模式，然后再开始上传。');
+
+      return;
 
     }
 
-  
+    // const aspectElement = document.querySelector('div[class^="dimension-layout-"] div[class^="toolbar-settings-"] button.lv-btn span[class^=.button-text-"]');
+    // if (!aspectElement || !aspectElement.textContent.includes('9:16')) {
 
-    // 开始上传
+    //   alert('请先在即梦输入框底部工具栏选择比例，确认是9:16，然后再开始上传。');
 
-        async startUpload() {
+    //   return;
 
-          // 检查是否选择了“图片生成”
+    // }
+    if (this.storyboards.length === 0) {
 
-          const modeElement = document.querySelector('div[class^="dimension-layout-"] div[class^="toolbar-settings-"] .lv-select-view .lv-select-view-value');
+      alert('请先添加分镜');
 
-          if (!modeElement || !modeElement.textContent.includes('图片生成')) {
+      return;
 
-            alert('请先在即梦输入框底部工具栏手动选择“图片生成”模式，然后再开始上传。');
+    }
 
-            return;
 
-          }
 
-          // const aspectElement = document.querySelector('div[class^="dimension-layout-"] div[class^="toolbar-settings-"] button.lv-btn span[class^=.button-text-"]');
-          // if (!aspectElement || !aspectElement.textContent.includes('9:16')) {
+    console.log('开始批量上传，总共', this.storyboards.length, '个分镜');
 
-          //   alert('请先在即梦输入框底部工具栏选择比例，确认是9:16，然后再开始上传。');
 
-          //   return;
 
-          // }
-          if (this.storyboards.length === 0) {
+    // 重置所有分镜状态
 
-            alert('请先添加分镜');
+    this.storyboards.forEach(storyboard => {
 
-            return;
+      if (storyboard.status !== 'completed') {
 
-          }
-
-    
-
-          console.log('开始批量上传，总共', this.storyboards.length, '个分镜');
-
-          
-
-          // 重置所有分镜状态
-
-          this.storyboards.forEach(storyboard => {
-
-            if (storyboard.status !== 'completed') {
-
-              storyboard.status = 'pending';
-
-            }
-
-          });
-
-    
-
-          this.isRunning = true;
-
-          this.isPaused = false;
-
-          this.currentIndex = 0;
-
-          
-
-          this.updateButtons();
-
-          this.renderStoryboards();
-
-          await this.processNextStoryboard();
-
-        }
-
-  
-
-    // 处理下一个分镜
-
-    async processNextStoryboard() {
-
-      console.log(`processNextStoryboard: 当前索引=${this.currentIndex}, 总数=${this.storyboards.length}, 运行状态=${this.isRunning}, 暂停状态=${this.isPaused}`);
-
-      
-
-      if (!this.isRunning || this.isPaused) {
-
-        console.log('停止处理：运行状态或暂停状态不允许继续');
-
-        return;
+        storyboard.status = 'pending';
 
       }
 
-      
+    });
 
-      if (this.currentIndex >= this.storyboards.length) {
 
-        console.log('所有分镜处理完成，调用completeUpload');
 
-        this.completeUpload();
+    this.isRunning = true;
 
-        return;
+    this.isPaused = false;
 
-      }
+    this.currentIndex = 0;
 
-  
 
-      const storyboard = this.storyboards[this.currentIndex];
 
-      console.log(`开始处理第${this.currentIndex + 1}个分镜: ${storyboard.name}`);
+    this.updateButtons();
 
-      this.updateProgress();
+    this.renderStoryboards();
 
-      
+    await this.processNextStoryboard();
 
-      // 如果不是第一个分镜，先清理之前的内容
+  }
 
-      if (this.currentIndex > 0) {
 
-        console.log('清理上一个分镜的内容...');
 
-        try {
+  // 处理下一个分镜
 
-          await this.clearPreviousContent();
+  async processNextStoryboard() {
 
-        } catch (error) {
+    console.log(`processNextStoryboard: 当前索引=${this.currentIndex}, 总数=${this.storyboards.length}, 运行状态=${this.isRunning}, 暂停状态=${this.isPaused}`);
 
-          console.error('清理内容失败:', error);
 
-        }
 
-      }
+    if (!this.isRunning || this.isPaused) {
 
-      
+      console.log('停止处理：运行状态或暂停状态不允许继续');
+
+      return;
+
+    }
+
+
+
+    if (this.currentIndex >= this.storyboards.length) {
+
+      console.log('所有分镜处理完成，调用completeUpload');
+
+      this.completeUpload();
+
+      return;
+
+    }
+
+
+
+    const storyboard = this.storyboards[this.currentIndex];
+
+    console.log(`开始处理第${this.currentIndex + 1}个分镜: ${storyboard.name}`);
+
+    this.updateProgress();
+
+
+
+    // 如果不是第一个分镜，先清理之前的内容
+
+    if (this.currentIndex > 0) {
+
+      console.log('清理上一个分镜的内容...');
 
       try {
 
-        await this.uploadStoryboard(storyboard);
-
-        storyboard.status = 'completed';
-
-        console.log(`分镜 ${storyboard.name} 处理成功`);
-
-      } catch (error) {
-
-        console.error(`分镜 ${storyboard.name} 处理失败:`, error);
-
-        storyboard.status = 'failed';
-
-      }
-
-  
-
-      this.renderStoryboards();
-
-      this.currentIndex++;
-
-  
-
-      console.log(`等待 ${this.interval/1000} 秒后处理下一个分镜...`);
-
-      
-
-      // 等待用户设置的间隔时间后继续下一个分镜
-
-      if (this.isRunning && !this.isPaused) {
-
-        setTimeout(() => {
-
-          console.log('间隔时间到，继续处理下一个分镜');
-
-          if (this.isRunning && !this.isPaused) {
-
-            this.processNextStoryboard();
-
-          } else {
-
-            console.log('状态已改变，停止处理');
-
-          }
-
-        }, this.interval);
-
-      } else {
-
-        console.log('状态不允许继续，停止处理');
-
-      }
-
-    }
-
-  
-
-    // 上传单个分镜
-
-    async uploadStoryboard(storyboard) {
-
-      console.log(`开始上传分镜: ${storyboard.name}`);
-
-      storyboard.status = 'uploading';
-
-      this.renderStoryboards();
-
-  
-
-      try {
-
-        // 1. 上传图片 (包括角色参考图和分镜自身的图)
-
-        console.log('步骤1: 上传图片...');
-
-        const imagesToUpload = [...storyboard.images];
-
-        
-
-        // 查找与当前提示词匹配的角色，并添加其参考图
-
-        const mentionedCharacters = this._extractCharactersFromPrompt(storyboard.prompt);
-
-        mentionedCharacters.forEach(name => {
-
-          const character = this.characters.find(c => c.name === name && c.image);
-
-          if (character) {
-
-            console.log(`为分镜 ${storyboard.name} 添加角色 ${name} 的参考图`);
-
-            imagesToUpload.push(character.image);
-
-          }
-
-        });
-
-  
-
-        console.log('总共上传', imagesToUpload.length, '张图片 (分镜+角色)');
-
-        try {
-
-          await this.uploadImages(imagesToUpload);
-
-          console.log('✓ 图片上传成功');
-
-        } catch (error) {
-
-          console.error('✗ 图片上传失败:', error.message);
-
-          throw new Error(`图片上传失败: ${error.message}`);
-
-        }
-
-  
-
-                // 2. 填写提示词
-
-  
-
-                const finalPrompt = storyboard.prompt + ' 图片风格：'+this.selectedStyle
-
-  
-
-                console.log('步骤2: 填写提示词...', finalPrompt.substring(0, 50) + '...');
-
-  
-
-                try {
-
-  
-
-                  await this.fillPrompt(finalPrompt);
-
-  
-
-                  console.log('✓ 提示词填写成功');
-
-  
-
-                } catch (error) {
-
-          console.error('✗ 提示词填写失败:', error.message);
-
-          throw new Error(`提示词填写失败: ${error.message}`);
-
-        }
-
-  
-
-        // 3. 点击生成按钮
-
-        console.log('步骤3: 点击生成按钮...');
-
-        try {
-
-          await this.clickGenerate();
-
-          console.log('✓ 生成按钮点击成功');
-
-        } catch (error) {
-
-          console.error('✗ 生成按钮点击失败:', error.message);
-
-          throw new Error(`生成按钮点击失败: ${error.message}`);
-
-        }
-
-        
-
-        console.log(`✓ 分镜 ${storyboard.name} 发送完成`);
-
-      } catch (error) {
-
-        console.error(`✗ 分镜 ${storyboard.name} 上传失败:`, error.message);
-
-        throw error;
-
-      }
-
-    }
-
-  
-
-    // 清理之前的内容
-
-    async clearPreviousContent() {
-
-      try {
-
-        console.log('开始清理上一个分镜的内容...');
-
-        
-
-        // 1. 清理参考图 - 根据用户提供的元素选择器
-
-        console.log('清理参考图...');
-
-        const imageDeleteSelectors = [
-
-          '.remove-button-CGHPzk', // 用户提供的删除按钮类名
-
-          '.remove-button-container-x2kHww .remove-button-CGHPzk', // 完整路径
-
-          'div[class*="remove-button-CGHPzk"]', // 模糊匹配
-
-          'div[class*="remove-button"] svg', // 包含svg的删除按钮
-
-          'button:has(svg) path[d*="19.579"]' // 根据SVG路径特征匹配
-
-        ];
-
-        
-
-        for (const selector of imageDeleteSelectors) {
-
-          try {
-
-            const deleteButtons = document.querySelectorAll(selector);
-
-            console.log(`找到 ${deleteButtons.length} 个删除按钮 (${selector})`);
-
-            deleteButtons.forEach((btn, index) => {
-
-              if (btn.offsetParent !== null) { // 确保按钮可见
-
-                console.log(`点击第 ${index + 1} 个删除按钮`);
-
-                btn.click();
-
-              }
-
-            });
-
-            if (deleteButtons.length > 0) {
-
-              await this.sleep(300); // 等待删除动画完成
-
-            }
-
-          } catch (e) {
-
-            console.log(`选择器 ${selector} 执行失败:`, e.message);
-
-          }
-
-        }
-
-  
-
-        // 2. 清理提示词 - 根据用户提供的元素选择器
-
-        console.log('清理提示词...');
-
-        const promptSelectors = [
-
-          'input.lv-input.prompt-input-ajcKzc', // 用户提供的input选择器
-
-          'textarea.lv-textarea.prompt-textarea-XfqAoB', // 用户提供的textarea选择器
-
-          'input[placeholder*="请描述你想生成的图片"]',
-
-          'textarea[placeholder*="请描述你想生成的图片"]',
-
-          'input.lv-input[translate="no"]',
-
-          'textarea.lv-textarea[translate="no"]'
-
-        ];
-
-        
-
-        for (const selector of promptSelectors) {
-
-          try {
-
-            const inputs = document.querySelectorAll(selector);
-
-            console.log(`找到 ${inputs.length} 个提示词输入框 (${selector})`);
-
-            inputs.forEach((input, index) => {
-
-              if (input.offsetParent !== null && (input.value || input.textContent)) {
-
-                console.log(`清理第 ${index + 1} 个输入框，当前内容:`, input.value || input.textContent);
-
-                input.focus();
-
-                
-
-                // 全选并删除
-
-                if (input.tagName === 'TEXTAREA' || input.tagName === 'INPUT') {
-
-                  input.select(); // 全选
-
-                  input.value = '';
-
-                  // 触发多种事件确保即梦检测到变化
-
-                  input.dispatchEvent(new Event('input', { bubbles: true }));
-
-                  input.dispatchEvent(new Event('change', { bubbles: true }));
-
-                  input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
-
-                } else if (input.contentEditable === 'true') {
-
-                  // 对于contenteditable元素
-
-                  input.focus();
-
-                  document.execCommand('selectAll');
-
-                  document.execCommand('delete');
-
-                  input.dispatchEvent(new Event('input', { bubbles: true }));
-
-                }
-
-              }
-
-            });
-
-          } catch (e) {
-
-            console.log(`选择器 ${selector} 执行失败:`, e.message);
-
-          }
-
-        }
-
-  
-
-        console.log('内容清理完成');
+        await this.clearPreviousContent();
 
       } catch (error) {
 
@@ -3433,169 +2604,270 @@ class JimengBatchUploader {
 
       }
 
-  
+    }
 
-      await this.sleep(800); // 等待清理完成
+
+
+    try {
+
+      await this.uploadStoryboard(storyboard);
+
+      storyboard.status = 'completed';
+
+      console.log(`分镜 ${storyboard.name} 处理成功`);
+
+    } catch (error) {
+
+      console.error(`分镜 ${storyboard.name} 处理失败:`, error);
+
+      storyboard.status = 'failed';
 
     }
 
-  
 
-    // 上传图片到即梦
 
-    async uploadImages(images) {
+    this.renderStoryboards();
 
-      console.log('开始上传图片，共', images.length, '张');
+    this.currentIndex++;
 
-      
 
-      if (images.length === 0) {
 
-        console.log('没有需要上传的图片，跳过此步骤。');
+    console.log(`等待 ${this.interval / 1000} 秒后处理下一个分镜...`);
 
-        return;
+
+
+    // 等待用户设置的间隔时间后继续下一个分镜
+
+    if (this.isRunning && !this.isPaused) {
+
+      setTimeout(() => {
+
+        console.log('间隔时间到，继续处理下一个分镜');
+
+        if (this.isRunning && !this.isPaused) {
+
+          this.processNextStoryboard();
+
+        } else {
+
+          console.log('状态已改变，停止处理');
+
+        }
+
+      }, this.interval);
+
+    } else {
+
+      console.log('状态不允许继续，停止处理');
+
+    }
+
+  }
+
+
+
+  // 上传单个分镜
+
+  async uploadStoryboard(storyboard) {
+
+    console.log(`开始上传分镜: ${storyboard.name}`);
+
+    storyboard.status = 'uploading';
+
+    this.renderStoryboards();
+
+
+
+    try {
+
+      // 1. 上传图片 (包括角色参考图和分镜自身的图)
+
+      console.log('步骤1: 上传图片...');
+
+      const imagesToUpload = [...storyboard.images];
+
+
+
+      // 查找与当前提示词匹配的角色，并添加其参考图
+
+      const mentionedCharacters = this._extractCharactersFromPrompt(storyboard.prompt);
+
+      mentionedCharacters.forEach(name => {
+
+        const character = this.characters.find(c => c.name === name && c.image);
+
+        if (character) {
+
+          console.log(`为分镜 ${storyboard.name} 添加角色 ${name} 的参考图`);
+
+          imagesToUpload.push(character.image);
+
+        }
+
+      });
+
+
+
+      console.log('总共上传', imagesToUpload.length, '张图片 (分镜+角色)');
+
+      try {
+
+        await this.uploadImages(imagesToUpload);
+
+        console.log('✓ 图片上传成功');
+
+      } catch (error) {
+
+        console.error('✗ 图片上传失败:', error.message);
+
+        throw new Error(`图片上传失败: ${error.message}`);
 
       }
 
-      
 
-      // 等待页面稳定，增加等待时间
 
-      await this.sleep(1000);
+      // 2. 填写提示词
 
-      
 
-      // 查找上传区域 - 多次尝试，因为页面可能需要时间加载
 
-      const uploadSelectors = [
+      const finalPrompt = storyboard.prompt + ' 图片风格：' + this.selectedStyle
 
-        'input.file-input-O6KAhP', // 用户提供的上传input类名
 
-        'input[type="file"][accept*="image"]',
 
-        'input[type="file"][multiple]',
+      console.log('步骤2: 填写提示词...', finalPrompt.substring(0, 50) + '...');
 
-        'input[type="file"]'
+
+
+      try {
+
+
+
+        await this.fillPrompt(finalPrompt);
+
+
+
+        console.log('✓ 提示词填写成功');
+
+
+
+      } catch (error) {
+
+        console.error('✗ 提示词填写失败:', error.message);
+
+        throw new Error(`提示词填写失败: ${error.message}`);
+
+      }
+
+
+
+      // 3. 点击生成按钮
+
+      console.log('步骤3: 点击生成按钮...');
+
+      try {
+
+        await this.clickGenerate();
+
+        console.log('✓ 生成按钮点击成功');
+
+      } catch (error) {
+
+        console.error('✗ 生成按钮点击失败:', error.message);
+
+        throw new Error(`生成按钮点击失败: ${error.message}`);
+
+      }
+
+
+
+      console.log(`✓ 分镜 ${storyboard.name} 发送完成`);
+
+    } catch (error) {
+
+      console.error(`✗ 分镜 ${storyboard.name} 上传失败:`, error.message);
+
+      throw error;
+
+    }
+
+  }
+
+
+
+  // 清理之前的内容
+
+  async clearPreviousContent() {
+
+    try {
+
+      console.log('开始清理上一个分镜的内容...');
+
+
+
+      // 1. 清理参考图 - 根据用户提供的元素选择器
+
+      console.log('清理参考图...');
+
+      const imageDeleteSelectors = [
+
+        '.remove-button-CGHPzk', // 用户提供的删除按钮类名
+
+        'div[class*="remove-button-CGHPzk"]', // 模糊匹配
+        '.remove-button-container-x2kHww .remove-button-CGHPzk', // 完整路径
+
+
+        'div[class*="remove-button"] svg', // 包含svg的删除按钮
+
+        'button:has(svg) path[d*="19.579"]' // 根据SVG路径特征匹配
 
       ];
 
-      
 
-      let uploadInput = null;
 
-      
+      for (const selector of imageDeleteSelectors) {
 
-      // 查找上传input
+        try {
 
-      for (const selector of uploadSelectors) {
+          const deleteButtons = document.querySelectorAll(selector);
 
-        const inputs = document.querySelectorAll(selector);
+          console.log(`找到 ${deleteButtons.length} 个删除按钮 (${selector})`);
 
-        console.log(`查找选择器 ${selector}，找到 ${inputs.length} 个input`);
+          deleteButtons.forEach((btn, index) => {
 
-        
+            if (btn.offsetParent !== null) { // 确保按钮可见
 
-        if (inputs.length > 0) {
+              console.log(`点击第 ${index + 1} 个删除按钮`);
 
-          // 文件input通常是隐藏的，直接使用第一个找到的input
+              btn.click();
 
-          uploadInput = inputs[0];
+            }
 
-          console.log('找到上传input:', selector, uploadInput, 'disabled:', uploadInput.disabled);
+          });
 
-          break;
+          if (deleteButtons.length > 0) {
+
+            await this.sleep(300); // 等待删除动画完成
+
+          }
+
+        } catch (e) {
+
+          console.log(`选择器 ${selector} 执行失败:`, e.message);
 
         }
 
       }
 
-      
 
-      if (!uploadInput) {
 
-        throw new Error('找不到上传区域');
+      // 2. 清理提示词 - 根据用户提供的元素选择器
 
-      }
+      console.log('清理提示词...');
 
-  
+      const promptSelectors = [
 
-      // 模拟文件上传
-
-      try {
-
-        console.log('准备上传到input:', uploadInput.className || uploadInput.tagName);
-
-        
-
-        // 完全重置input状态
-
-        uploadInput.value = '';
-
-        
-
-        const dataTransfer = new DataTransfer();
-
-        images.forEach(image => {
-
-          dataTransfer.items.add(image);
-
-        });
-
-  
-
-        uploadInput.files = dataTransfer.files;
-
-        
-
-        // 触发change事件
-
-        const changeEvent = new Event('change', { bubbles: true });
-
-        uploadInput.dispatchEvent(changeEvent);
-
-        
-
-        // 也触发input事件
-
-        const inputEvent = new Event('input', { bubbles: true });
-
-        uploadInput.dispatchEvent(inputEvent);
-
-        
-
-        console.log('图片上传事件已触发');
-
-      } catch (error) {
-
-        console.error('上传图片失败:', error);
-
-        throw error;
-
-      }
-
-  
-
-      await this.sleep(1000); // 等待上传完成
-
-    }
-
-  
-
-    // 填写提示词
-
-    async fillPrompt(prompt) {
-
-      console.log('开始填写提示词:', prompt);
-
-      
-
-      // 根据用户提供的元素选择器查找提示词输入框
-
-      const inputSelectors = [
-
-        'input.lv-input.prompt-input-ajcKzc', // 用户提供的input选择器
-
-        'textarea.lv-textarea.prompt-textarea-XfqAoB', // 用户提供的textarea选择器
+        'textarea.lv-textarea', // 用户提供的textarea选择器
+        'input.lv-input', // 用户提供的input选择器
 
         'input[placeholder*="请描述你想生成的图片"]',
 
@@ -3603,41 +2875,605 @@ class JimengBatchUploader {
 
         'input.lv-input[translate="no"]',
 
-        'textarea.lv-textarea[translate="no"]',
-
-        // 备用选择器
-
-        'textarea',
-
-        'input[type="text"]',
-
-        '[contenteditable="true"]'
+        'textarea.lv-textarea[translate="no"]'
 
       ];
 
-  
 
-      let promptInput = null;
 
-      
-
-      for (const selector of inputSelectors) {
+      for (const selector of promptSelectors) {
 
         try {
 
           const inputs = document.querySelectorAll(selector);
 
-          console.log(`尝试选择器 ${selector}，找到 ${inputs.length} 个元素`);
+          console.log(`找到 ${inputs.length} 个提示词输入框 (${selector})`);
+
+          inputs.forEach((input, index) => {
+
+            if (input.offsetParent !== null && (input.value || input.textContent)) {
+
+              console.log(`清理第 ${index + 1} 个输入框，当前内容:`, input.value || input.textContent);
+
+              input.focus();
+
+
+
+              // 全选并删除
+
+              if (input.tagName === 'TEXTAREA' || input.tagName === 'INPUT') {
+
+                input.select(); // 全选
+
+                input.value = '';
+
+                // 触发多种事件确保即梦检测到变化
+
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+
+                input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
+
+              } else if (input.contentEditable === 'true') {
+
+                // 对于contenteditable元素
+
+                input.focus();
+
+                document.execCommand('selectAll');
+
+                document.execCommand('delete');
+
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+
+              }
+
+            }
+
+          });
+
+        } catch (e) {
+
+          console.log(`选择器 ${selector} 执行失败:`, e.message);
+
+        }
+
+      }
+
+
+
+      console.log('内容清理完成');
+
+    } catch (error) {
+
+      console.error('清理内容失败:', error);
+
+    }
+
+
+
+    await this.sleep(800); // 等待清理完成
+
+  }
+
+
+
+  // 上传图片到即梦
+
+  async uploadImages(images) {
+
+    console.log('开始上传图片，共', images.length, '张');
+
+
+
+    if (images.length === 0) {
+
+      console.log('没有需要上传的图片，跳过此步骤。');
+
+      return;
+
+    }
+
+
+
+    // 等待页面稳定，增加等待时间
+
+    await this.sleep(1000);
+
+
+
+    // 查找上传区域 - 多次尝试，因为页面可能需要时间加载
+
+    const uploadSelectors = [
+
+      'input[class*="file-input-"]', // 用户提供的上传input类名
+
+      'input[type="file"][accept*="image"]',
+
+      'input[type="file"][multiple]',
+
+      'input[type="file"]'
+
+    ];
+
+
+
+    let uploadInput = null;
+
+
+
+    // 查找上传input
+
+    for (const selector of uploadSelectors) {
+
+      const inputs = document.querySelectorAll(selector);
+
+      console.log(`查找选择器 ${selector}，找到 ${inputs.length} 个input`);
+
+
+
+      if (inputs.length > 0) {
+
+        // 文件input通常是隐藏的，直接使用第一个找到的input
+
+        uploadInput = inputs[0];
+
+        console.log('找到上传input:', selector, uploadInput, 'disabled:', uploadInput.disabled);
+
+        break;
+
+      }
+
+    }
+
+
+
+    if (!uploadInput) {
+
+      throw new Error('找不到上传区域');
+
+    }
+
+
+
+    // 模拟文件上传
+
+    try {
+
+      console.log('准备上传到input:', uploadInput.className || uploadInput.tagName);
+
+
+
+      // 完全重置input状态
+
+      uploadInput.value = '';
+
+
+
+      const dataTransfer = new DataTransfer();
+
+      images.forEach(image => {
+
+        dataTransfer.items.add(image);
+
+      });
+
+
+
+      uploadInput.files = dataTransfer.files;
+
+
+
+      // 触发change事件
+
+      const changeEvent = new Event('change', { bubbles: true });
+
+      uploadInput.dispatchEvent(changeEvent);
+
+
+
+      // 也触发input事件
+
+      const inputEvent = new Event('input', { bubbles: true });
+
+      uploadInput.dispatchEvent(inputEvent);
+
+
+
+      console.log('图片上传事件已触发');
+
+    } catch (error) {
+
+      console.error('上传图片失败:', error);
+
+      throw error;
+
+    }
+
+
+
+    await this.sleep(1000); // 等待上传完成
+
+  }
+
+
+
+      // 填写提示词
+
+
+
+      async fillPrompt(prompt) {
+
+
+
+        console.log('开始填写提示词:', prompt);
+
+
+
+    
+
+
+
+        const inputSelectors = [
+
+
+
+          'textarea.lv-textarea',
+          'input.lv-input',
+
+
+
+
+
+
+          'input[placeholder*="请描述你想生成的图片"]',
+
+
+
+          'textarea[placeholder*="请描述你想生成的图片"]',
+
+
+
+          'input.lv-input[translate="no"]',
+
+
+
+          'textarea.lv-textarea[translate="no"]',
+
+
+
+          'textarea',
+
+
+
+          'input[type="text"]',
+
+
+
+          '[contenteditable="true"]'
+
+
+
+        ];
+
+
+
+    
+
+
+
+        let promptInput = null;
+
+
+
+    
+
+
+
+        for (const selector of inputSelectors) {
+
+
+
+          try {
+
+
+
+            const inputs = document.querySelectorAll(selector);
+
+
+
+            console.log(`尝试选择器 ${selector}，找到 ${inputs.length} 个元素`);
+
+
+
+    
+
+
+
+            for (const input of inputs) {
+
+
+
+              if (input.offsetParent !== null && !input.closest('#jimeng-batch-uploader')) {
+
+
+
+                promptInput = input;
+
+
+
+                console.log('选中输入框:', input);
+
+
+
+                break;
+
+
+
+              }
+
+
+
+            }
+
+
+
+            if (promptInput) break;
+
+
+
+          } catch (e) {
+
+
+
+            console.log(`选择器 ${selector} 执行失败:`, e.message);
+
+
+
+          }
+
+
+
+        }
+
+
+
+    
+
+
+
+        if (!promptInput) {
+
+
+
+          throw new Error('找不到提示词输入框');
+
+
+
+        }
+
+
+
+    
+
+
+
+        console.log('找到提示词输入框:', promptInput.tagName, promptInput.className);
+
+
+
+    
+
+
+
+        promptInput.focus();
+
+
+
+        await this.sleep(200);
+
+
+
+    
+
+
+
+        // Differentiated logic for different input types
+
+
+
+        if (promptInput.tagName === 'TEXTAREA' || promptInput.tagName === 'INPUT') {
+
+
+
+          console.log('使用React兼容方法填写Input/Textarea');
+
+
 
           
 
-          for (const input of inputs) {
 
-            if (input.offsetParent !== null) { // 确保输入框可见
 
-              promptInput = input;
+          const element = promptInput;
 
-              console.log('选中输入框:', input);
+
+
+          
+
+
+
+          // Set value using prototype setter hack for React compatibility
+
+
+
+          const nativeValueSetter = Object.getOwnPropertyDescriptor(element.constructor.prototype, 'value')?.set;
+
+
+
+          if (nativeValueSetter) {
+
+
+
+            nativeValueSetter.call(element, prompt);
+
+
+
+          } else {
+
+
+
+            // Fallback for unusual cases
+
+
+
+            element.value = prompt;
+
+
+
+          }
+
+
+
+    
+
+
+
+          // Trigger events to notify the framework of the change
+
+
+
+          element.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+
+
+
+          element.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+
+
+
+    
+          console.log('输入框',element)
+
+
+        } else if (promptInput.isContentEditable) {
+
+
+
+          console.log('使用 contentEditable 方法填写');
+
+
+
+          promptInput.innerHTML = prompt;
+
+
+
+          promptInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+
+
+
+        } else {
+
+
+
+            console.warn('未知的输入框类型，使用 value 属性作为后备方案');
+
+
+
+            promptInput.value = prompt;
+
+
+
+            promptInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+
+
+
+        }
+
+
+
+    
+
+
+
+        console.log('提示词填写完成');
+
+
+
+        await this.sleep(500);
+
+
+
+      }
+
+
+
+  // 点击生成按钮
+
+  async clickGenerate() {
+
+    console.log('开始查找生成按钮...');
+
+
+
+    // 根据用户提供的按钮特征查找发送按钮
+    // lv-btn lv-btn-secondary lv-btn-size-default lv-btn-shape-square button-wtoV7J lv-popover-open active-NdxDQM
+    // lv-btn lv-btn-primary lv-btn-size-default lv-btn-shape-circle lv-btn-icon-only lv-btn-disabled button-wtoV7J submit-button-VW0U_J submit-button-M82Oxj
+    const buttonSelectors = [
+
+
+      'button[class*="submit-button"]', // 包含submit-button的按钮
+
+      // 'button.lv-btn-primary:has(svg)', // 包含SVG的主要按钮
+
+      'button:has(path[d*="M12.002 3c.424 0"])', // 根据SVG路径特征匹配
+
+      // 备用选择器
+
+      'button[type="submit"]',
+
+      'button[class*="send"]',
+
+      'button[class*="submit"]',
+
+      'button[class*="generate"]',
+
+      // 'button:has(svg)',
+
+    ];
+
+
+
+    let generateBtn = null;
+
+
+
+    // 查找发送按钮
+
+    for (const selector of buttonSelectors) {
+
+      try {
+
+        const buttons = document.querySelectorAll(selector);
+
+        console.log(`尝试选择器 ${selector}，找到 ${buttons.length} 个按钮`);
+
+
+
+        for (const btn of buttons) {
+
+          if (btn.offsetParent !== null) { // 确保按钮可见
+
+            const isDisabled = btn.disabled || btn.classList.contains('lv-btn-disabled');
+
+            console.log(`按钮状态: disabled=${isDisabled}, classes=${btn.className}`);
+
+
+
+            if (!isDisabled) {
+
+              generateBtn = btn;
+
+              console.log('找到可用的发送按钮:', btn);
 
               break;
 
@@ -3645,455 +3481,285 @@ class JimengBatchUploader {
 
           }
 
-          if (promptInput) break;
-
-        } catch (e) {
-
-          console.log(`选择器 ${selector} 执行失败:`, e.message);
-
         }
 
-      }
+        if (generateBtn) break;
 
-  
+      } catch (e) {
 
-      if (!promptInput) {
-
-        throw new Error('找不到提示词输入框');
+        console.log(`选择器 ${selector} 执行失败:`, e.message);
 
       }
-
-  
-
-      console.log('找到提示词输入框:', promptInput.tagName, promptInput.className);
-
-      
-
-      // 聚焦输入框
-
-      promptInput.focus();
-
-      await this.sleep(200);
-
-      
-
-      // 清空现有内容并填入新内容
-
-      if (promptInput.tagName === 'TEXTAREA' || promptInput.tagName === 'INPUT') {
-
-        // 先清空
-
-        promptInput.value = '';
-
-        promptInput.dispatchEvent(new Event('input', { bubbles: true }));
-
-        await this.sleep(100);
-
-        
-
-        // 填入新内容
-
-        promptInput.value = prompt;
-
-        
-
-        // 触发多种事件确保即梦能检测到内容变化
-
-        promptInput.dispatchEvent(new Event('input', { bubbles: true }));
-
-        promptInput.dispatchEvent(new Event('change', { bubbles: true }));
-
-        promptInput.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
-
-        promptInput.dispatchEvent(new Event('paste', { bubbles: true }));
-
-        
-
-      } else if (promptInput.contentEditable === 'true') {
-
-        // 对于contenteditable元素
-
-        promptInput.textContent = '';
-
-        promptInput.dispatchEvent(new Event('input', { bubbles: true }));
-
-        await this.sleep(100);
-
-        
-
-        promptInput.textContent = prompt;
-
-        promptInput.dispatchEvent(new Event('input', { bubbles: true }));
-
-      }
-
-      
-
-      console.log('提示词填写完成');
-
-      await this.sleep(500);
 
     }
 
-  
 
-    // 点击生成按钮
 
-    async clickGenerate() {
+    // 如果还是找不到，尝试查找最右侧的可用按钮
 
-      console.log('开始查找生成按钮...');
+    if (!generateBtn) {
 
-      
+      console.log('使用备用方案：查找最右侧按钮');
 
-      // 根据用户提供的按钮特征查找发送按钮
+      const allButtons = document.querySelectorAll('button');
 
-      const buttonSelectors = [
+      let rightmostBtn = null;
 
-        'button.lv-btn.lv-btn-primary.submit-button-VW0U_J', // 用户提供的按钮类名
+      let maxRight = -1;
 
-        'button.lv-btn.submit-button-M82Oxj', // 另一个可能的类名
 
-        'button[class*="submit-button"]', // 包含submit-button的按钮
 
-        'button.lv-btn-primary:has(svg)', // 包含SVG的主要按钮
+      allButtons.forEach(btn => {
 
-        'button:has(path[d*="M12.002 3c.424 0"])', // 根据SVG路径特征匹配
+        if (btn.offsetParent !== null && !btn.disabled && !btn.classList.contains('lv-btn-disabled')) {
 
-        // 备用选择器
+          const rect = btn.getBoundingClientRect();
 
-        'button[type="submit"]',
+          if (rect.right > maxRight) {
 
-        'button[class*="send"]',
+            maxRight = rect.right;
 
-        'button[class*="submit"]',
-
-        'button[class*="generate"]',
-
-        'button:has(svg)',
-
-        'form button'
-
-      ];
-
-  
-
-      let generateBtn = null;
-
-      
-
-      // 查找发送按钮
-
-      for (const selector of buttonSelectors) {
-
-        try {
-
-          const buttons = document.querySelectorAll(selector);
-
-          console.log(`尝试选择器 ${selector}，找到 ${buttons.length} 个按钮`);
-
-          
-
-          for (const btn of buttons) {
-
-            if (btn.offsetParent !== null) { // 确保按钮可见
-
-              const isDisabled = btn.disabled || btn.classList.contains('lv-btn-disabled');
-
-              console.log(`按钮状态: disabled=${isDisabled}, classes=${btn.className}`);
-
-              
-
-              if (!isDisabled) {
-
-                generateBtn = btn;
-
-                console.log('找到可用的发送按钮:', btn);
-
-                break;
-
-              }
-
-            }
+            rightmostBtn = btn;
 
           }
 
-          if (generateBtn) break;
-
-        } catch (e) {
-
-          console.log(`选择器 ${selector} 执行失败:`, e.message);
-
         }
-
-      }
-
-  
-
-      // 如果还是找不到，尝试查找最右侧的可用按钮
-
-      if (!generateBtn) {
-
-        console.log('使用备用方案：查找最右侧按钮');
-
-        const allButtons = document.querySelectorAll('button');
-
-        let rightmostBtn = null;
-
-        let maxRight = -1;
-
-        
-
-        allButtons.forEach(btn => {
-
-          if (btn.offsetParent !== null && !btn.disabled && !btn.classList.contains('lv-btn-disabled')) {
-
-            const rect = btn.getBoundingClientRect();
-
-            if (rect.right > maxRight) {
-
-              maxRight = rect.right;
-
-              rightmostBtn = btn;
-
-            }
-
-          }
-
-        });
-
-        generateBtn = rightmostBtn;
-
-      }
-
-  
-
-      if (!generateBtn) {
-
-        throw new Error('找不到可用的生成/发送按钮');
-
-      }
-
-  
-
-      console.log('准备点击发送按钮:', generateBtn.className);
-
-      
-
-      // 确保按钮处于可点击状态
-
-      generateBtn.focus();
-
-      await this.sleep(200);
-
-      
-
-      // 点击按钮
-
-      generateBtn.click();
-
-      console.log('发送按钮已点击');
-
-      
-
-      // 发送完成，等待一小段时间确保请求发出
-
-      await this.sleep(1000);
-
-    }
-
-  
-
-    // 暂停上传
-
-    pauseUpload() {
-
-      this.isPaused = !this.isPaused;
-
-      this.updateButtons();
-
-    }
-
-  
-
-    // 停止上传
-
-    stopUpload() {
-
-      this.isRunning = false;
-
-      this.isPaused = false;
-
-      this.currentIndex = 0;
-
-      this.updateButtons();
-
-      this.updateProgress();
-
-    }
-
-  
-
-    // 完成上传
-
-    completeUpload() {
-
-      this.isRunning = false;
-
-      this.isPaused = false;
-
-      this.updateButtons();
-
-      this.updateProgress();
-
-      alert('所有分镜上传完成！');
-
-    }
-
-  
-
-    // 重新排序分镜名称
-
-    reorderStoryboards() {
-
-      this.storyboards.forEach((storyboard, index) => {
-
-        storyboard.name = `分镜${index + 1}`;
 
       });
 
-    }
-
-  
-
-    // 清空分镜列表
-
-    clearStoryboards() {
-
-      if (confirm('确定要清空所有分镜吗？')) {
-
-        this.storyboards = [];
-
-        this.renderStoryboards();
-
-        this.updateAndRenderCharacters(); // 清空角色列表
-
-      }
+      generateBtn = rightmostBtn;
 
     }
 
-  
 
-    // 更新按钮状态
 
-    updateButtons() {
+    if (!generateBtn) {
 
-      const startBtn = this.floatingWindow.querySelector('.jbu-start');
-
-      const pauseBtn = this.floatingWindow.querySelector('.jbu-pause');
-
-      const stopBtn = this.floatingWindow.querySelector('.jbu-stop');
-
-  
-
-      startBtn.disabled = this.isRunning;
-
-      pauseBtn.disabled = !this.isRunning;
-
-      stopBtn.disabled = !this.isRunning;
-
-      
-
-      pauseBtn.textContent = this.isPaused ? '继续' : '暂停';
+      throw new Error('找不到可用的生成/发送按钮');
 
     }
 
-  
 
-    // 更新进度
 
-    updateProgress() {
+    console.log('准备点击发送按钮:', generateBtn.className);
 
-      const progressText = this.floatingWindow.querySelector('.jbu-progress-text');
 
-      const progressFill = this.floatingWindow.querySelector('.jbu-progress-fill');
 
-  
+    // 确保按钮处于可点击状态
 
-      if (!this.isRunning) {
+    generateBtn.focus();
 
-        progressText.textContent = '准备就绪';
+    await this.sleep(200);
 
-        progressFill.style.width = '0%';
 
-        return;
 
-      }
+    // 点击按钮
 
-  
+    generateBtn.click();
 
-      const progress = (this.currentIndex / this.storyboards.length) * 100;
+    console.log('发送按钮已点击');
 
-      progressText.textContent = `第${this.currentIndex + 1}个分镜，共${this.storyboards.length}个分镜`;
 
-      progressFill.style.width = `${progress}%`;
+
+    // 发送完成，等待一小段时间确保请求发出
+
+    await this.sleep(1000);
+
+  }
+
+
+
+  // 暂停上传
+
+  pauseUpload() {
+
+    this.isPaused = !this.isPaused;
+
+    this.updateButtons();
+
+  }
+
+
+
+  // 停止上传
+
+  stopUpload() {
+
+    this.isRunning = false;
+
+    this.isPaused = false;
+
+    this.currentIndex = 0;
+
+    this.updateButtons();
+
+    this.updateProgress();
+
+  }
+
+
+
+  // 完成上传
+
+  completeUpload() {
+
+    this.isRunning = false;
+
+    this.isPaused = false;
+
+    this.updateButtons();
+
+    this.updateProgress();
+
+    alert('所有分镜上传完成！');
+
+  }
+
+
+
+  // 重新排序分镜名称
+
+  reorderStoryboards() {
+
+    this.storyboards.forEach((storyboard, index) => {
+
+      storyboard.name = `分镜${index + 1}`;
+
+    });
+
+  }
+
+
+
+  // 清空分镜列表
+
+  clearStoryboards() {
+
+    if (confirm('确定要清空所有分镜吗？')) {
+
+      this.storyboards = [];
+
+      this.renderStoryboards();
+
+      this.updateAndRenderCharacters(); // 清空角色列表
 
     }
 
-  
+  }
 
-    // 获取状态文本
 
-    getStatusText(status) {
 
-      const statusMap = {
+  // 更新按钮状态
 
-        pending: '待上传',
+  updateButtons() {
 
-        uploading: '上传中',
+    const startBtn = this.floatingWindow.querySelector('.jbu-start');
 
-        completed: '已完成',
+    const pauseBtn = this.floatingWindow.querySelector('.jbu-pause');
 
-        failed: '失败'
+    const stopBtn = this.floatingWindow.querySelector('.jbu-stop');
 
-      };
 
-      return statusMap[status] || '未知';
+
+    startBtn.disabled = this.isRunning;
+
+    pauseBtn.disabled = !this.isRunning;
+
+    stopBtn.disabled = !this.isRunning;
+
+
+
+    pauseBtn.textContent = this.isPaused ? '继续' : '暂停';
+
+  }
+
+
+
+  // 更新进度
+
+  updateProgress() {
+
+    const progressText = this.floatingWindow.querySelector('.jbu-progress-text');
+
+    const progressFill = this.floatingWindow.querySelector('.jbu-progress-fill');
+
+
+
+    if (!this.isRunning) {
+
+      progressText.textContent = '准备就绪';
+
+      progressFill.style.width = '0%';
+
+      return;
 
     }
 
-  
 
-    // 最小化/展开
 
-    toggleMinimize() {
+    const progress = (this.currentIndex / this.storyboards.length) * 100;
 
-      console.log('切换最小化状态');
+    progressText.textContent = `第${this.currentIndex + 1}个分镜，共${this.storyboards.length}个分镜`;
 
-      
+    progressFill.style.width = `${progress}%`;
 
-      try {
+  }
 
-        const content = this.floatingWindow.querySelector('.jbu-content');
 
-        const header = this.floatingWindow.querySelector('.jbu-header');
 
-        const floatingBall = this.floatingWindow.querySelector('.jbu-floating-ball');
+  // 获取状态文本
 
-        
+  getStatusText(status) {
 
-        if (this.floatingWindow.classList.contains('jbu-minimized')) {
+    const statusMap = {
 
-          // 展开
+      pending: '待上传',
 
-          console.log('展开悬浮窗');
+      uploading: '上传中',
 
-          this.floatingWindow.classList.remove('jbu-minimized');
+      completed: '已完成',
 
-          
+      failed: '失败'
 
-          // 恢复正常样式
+    };
 
-          this.floatingWindow.style.cssText = `
+    return statusMap[status] || '未知';
+
+  }
+
+
+
+  // 最小化/展开
+
+  toggleMinimize() {
+
+    console.log('切换最小化状态');
+
+
+
+    try {
+
+      const content = this.floatingWindow.querySelector('.jbu-content');
+
+      const header = this.floatingWindow.querySelector('.jbu-header');
+
+      const floatingBall = this.floatingWindow.querySelector('.jbu-floating-ball');
+
+
+
+      if (this.floatingWindow.classList.contains('jbu-minimized')) {
+
+        // 展开
+
+        console.log('展开悬浮窗');
+
+        this.floatingWindow.classList.remove('jbu-minimized');
+
+
+
+        // 恢复正常样式
+
+        this.floatingWindow.style.cssText = `
 
             position: fixed;
 
@@ -4119,29 +3785,29 @@ class JimengBatchUploader {
 
           `;
 
-          
 
-          content.style.display = 'block';
 
-          header.style.display = 'flex';
+        content.style.display = 'block';
 
-          floatingBall.style.display = 'none';
+        header.style.display = 'flex';
 
-          
+        floatingBall.style.display = 'none';
 
-        } else {
 
-          // 最小化为悬浮球
 
-          console.log('最小化为悬浮球');
+      } else {
 
-          this.floatingWindow.classList.add('jbu-minimized');
+        // 最小化为悬浮球
 
-          
+        console.log('最小化为悬浮球');
 
-          // 设置悬浮球样式 - 确保贴右边
+        this.floatingWindow.classList.add('jbu-minimized');
 
-          this.floatingWindow.style.cssText = `
+
+
+        // 设置悬浮球样式 - 确保贴右边
+
+        this.floatingWindow.style.cssText = `
 
             position: fixed !important;
 
@@ -4171,922 +3837,921 @@ class JimengBatchUploader {
 
           `;
 
-          
 
-          content.style.display = 'none';
 
-          header.style.display = 'none';
+        content.style.display = 'none';
 
-          floatingBall.style.display = 'flex';
+        header.style.display = 'none';
 
-        }
-
-      } catch (error) {
-
-        console.error('切换最小化状态失败:', error);
+        floatingBall.style.display = 'flex';
 
       }
 
+    } catch (error) {
+
+      console.error('切换最小化状态失败:', error);
+
     }
 
-  
+  }
 
-      // 使悬浮窗可拖拽
 
-  
 
-            makeDraggable() {
+  // 使悬浮窗可拖拽
 
-  
 
-              const element = this.floatingWindow;
 
-  
+  makeDraggable() {
 
-              const header = element.querySelector('.jbu-header');
 
-  
 
-              const DRAG_HANDLE_WIDTH = 10; // 允许从左侧10px范围内拖拽
+    const element = this.floatingWindow;
 
-  
 
-      
 
-  
+    const header = element.querySelector('.jbu-header');
 
-              let isDragging = false;
 
-  
 
-              let initialX;
+    const DRAG_HANDLE_WIDTH = 10; // 允许从左侧10px范围内拖拽
 
-  
 
-              let initialY;
 
-  
 
-              let offsetX; // 鼠标点击位置相对于元素左上角的偏移
 
-  
 
-              let offsetY;
 
-  
+    let isDragging = false;
 
-      
 
-  
 
-              const startDrag = (e) => {
+    let initialX;
 
-  
 
-                // 确保不是在按钮上开始拖拽
 
-  
+    let initialY;
 
-                if (e.target.tagName === 'BUTTON' || e.target.classList.contains('jbu-resize-handle')) return;
 
-  
 
-      
+    let offsetX; // 鼠标点击位置相对于元素左上角的偏移
 
-  
 
-                const rect = element.getBoundingClientRect();
 
-  
+    let offsetY;
 
-                const clickX = e.clientX;
 
-  
 
-                const clickY = e.clientY;
 
-  
 
-      
 
-  
 
-                // 检查是否在头部区域或者左侧拖拽区域
+    const startDrag = (e) => {
 
-  
 
-                const isClickOnHeader = header.contains(e.target);
 
-  
+      // 确保不是在按钮上开始拖拽
 
-                const isClickOnLeftEdge = (clickX >= rect.left && clickX <= rect.left + DRAG_HANDLE_WIDTH && clickY >= rect.top && clickY <= rect.bottom);
 
-  
 
-      
+      if (e.target.tagName === 'BUTTON' || e.target.classList.contains('jbu-resize-handle')) return;
 
-  
 
-                if (isClickOnHeader || isClickOnLeftEdge) {
 
-  
 
-                  isDragging = true;
 
-  
 
-                  offsetX = clickX - rect.left;
 
-  
+      const rect = element.getBoundingClientRect();
 
-                  offsetY = clickY - rect.top;
 
-  
 
-      
+      const clickX = e.clientX;
 
-  
 
-                  // 记录初始位置，用于计算拖拽偏移
 
-  
+      const clickY = e.clientY;
 
-                  initialX = e.clientX;
 
-  
 
-                  initialY = e.clientY;
 
-  
 
-      
 
-  
 
-                  element.style.cursor = 'grabbing';
+      // 检查是否在头部区域或者左侧拖拽区域
 
-  
 
-                }
 
-  
+      const isClickOnHeader = header.contains(e.target);
 
-              };
 
-  
 
-      
+      const isClickOnLeftEdge = (clickX >= rect.left && clickX <= rect.left + DRAG_HANDLE_WIDTH && clickY >= rect.top && clickY <= rect.bottom);
 
-  
 
-              const drag = (e) => {
 
-  
 
-                if (isDragging) {
 
-  
 
-                  e.preventDefault();
 
-  
+      if (isClickOnHeader || isClickOnLeftEdge) {
 
-                  const dx = e.clientX - initialX;
 
-  
 
-                  const dy = e.clientY - initialY;
+        isDragging = true;
 
-  
 
-      
 
-  
+        offsetX = clickX - rect.left;
 
-                  element.style.left = (element.offsetLeft + dx) + 'px';
 
-  
 
-                  element.style.top = (element.offsetTop + dy) + 'px';
+        offsetY = clickY - rect.top;
 
-  
 
-      
 
-  
 
-                  initialX = e.clientX;
 
-  
 
-                  initialY = e.clientY;
 
-  
+        // 记录初始位置，用于计算拖拽偏移
 
-                }
 
-  
 
-              };
+        initialX = e.clientX;
 
-  
 
-      
 
-  
+        initialY = e.clientY;
 
-              const stopDrag = () => {
 
-  
 
-                isDragging = false;
 
-  
 
-                element.style.cursor = 'grab';
 
-  
 
-              };
+        element.style.cursor = 'grabbing';
 
-  
 
-      
 
-  
+      }
 
-              element.addEventListener('mousedown', startDrag);
 
-  
 
-              document.addEventListener('mousemove', drag);
+    };
 
-  
 
-              document.addEventListener('mouseup', stopDrag);
 
-  
+
+
+
+
+    const drag = (e) => {
+
+
+
+      if (isDragging) {
+
+
+
+        e.preventDefault();
+
+
+
+        const dx = e.clientX - initialX;
+
+
+
+        const dy = e.clientY - initialY;
+
+
+
+
+
+
+
+        element.style.left = (element.offsetLeft + dx) + 'px';
+
+
+
+        element.style.top = (element.offsetTop + dy) + 'px';
+
+
+
+
+
+
+
+        initialX = e.clientX;
+
+
+
+        initialY = e.clientY;
+
+
+
+      }
+
+
+
+    };
+
+
+
+
+
+
+
+    const stopDrag = () => {
+
+
+
+      isDragging = false;
+
+
+
+      element.style.cursor = 'grab';
+
+
+
+    };
+
+
+
+
+
+
+
+    element.addEventListener('mousedown', startDrag);
+
+
+
+    document.addEventListener('mousemove', drag);
+
+
+
+    document.addEventListener('mouseup', stopDrag);
+
+
+
+  }
+
+
+
+
+
+
+
+  // 使悬浮窗可缩放
+
+
+
+  makeResizable() {
+
+
+
+    const element = this.floatingWindow;
+
+
+
+    const handles = element.querySelectorAll('.jbu-resize-handle');
+
+
+
+    const minWidth = 300;
+
+
+
+    const minHeight = 400;
+
+
+
+    let originalWidth = 0;
+
+
+
+    let originalHeight = 0;
+
+
+
+    let originalX = 0;
+
+
+
+    let originalY = 0;
+
+
+
+    let startX = 0;
+
+
+
+    let startY = 0;
+
+
+
+
+
+
+
+    handles.forEach(handle => {
+
+
+
+      handle.addEventListener('mousedown', (e) => {
+
+
+
+        e.preventDefault();
+
+
+
+        originalWidth = parseFloat(getComputedStyle(element, null).getPropertyValue('width').replace('px', ''));
+
+
+
+        originalHeight = parseFloat(getComputedStyle(element, null).getPropertyValue('height').replace('px', ''));
+
+
+
+        originalX = element.getBoundingClientRect().left;
+
+
+
+        originalY = element.getBoundingClientRect().top;
+
+
+
+        startX = e.pageX;
+
+
+
+        startY = e.pageY;
+
+
+
+
+
+
+
+        const resize = (e) => {
+
+
+
+
+
+
+
+          if (handle.classList.contains('jbu-resize-se')) {
+
+
+
+
+
+
+
+            const width = originalWidth + (e.pageX - startX);
+
+
+
+
+
+
+
+            const height = originalHeight + (e.pageY - startY);
+
+
+
+
+
+
+
+            if (width > minWidth) {
+
+
+
+
+
+
+
+              element.style.width = width + 'px';
+
+
+
+
+
+
 
             }
 
-  
 
-    
 
-  
 
-      // 使悬浮窗可缩放
 
-  
 
-      makeResizable() {
 
-  
+            if (height > minHeight) {
 
-        const element = this.floatingWindow;
 
-  
 
-        const handles = element.querySelectorAll('.jbu-resize-handle');
 
-  
 
-        const minWidth = 300;
 
-  
 
-        const minHeight = 400;
+              element.style.height = height + 'px';
 
-  
 
-        let originalWidth = 0;
 
-  
 
-        let originalHeight = 0;
 
-  
 
-        let originalX = 0;
 
-  
+            }
 
-        let originalY = 0;
 
-  
 
-        let startX = 0;
 
-  
 
-        let startY = 0;
 
-  
 
-    
+          } else if (handle.classList.contains('jbu-resize-e')) {
 
-  
 
-        handles.forEach(handle => {
 
-  
 
-          handle.addEventListener('mousedown', (e) => {
 
-  
 
-            e.preventDefault();
 
-  
+            const width = originalWidth + (e.pageX - startX);
 
-            originalWidth = parseFloat(getComputedStyle(element, null).getPropertyValue('width').replace('px', ''));
 
-  
 
-            originalHeight = parseFloat(getComputedStyle(element, null).getPropertyValue('height').replace('px', ''));
 
-  
 
-            originalX = element.getBoundingClientRect().left;
 
-  
 
-            originalY = element.getBoundingClientRect().top;
+            if (width > minWidth) {
 
-  
 
-            startX = e.pageX;
 
-  
 
-            startY = e.pageY;
 
-  
 
-    
 
-  
+              element.style.width = width + 'px';
 
-                        const resize = (e) => {
 
-  
 
-    
 
-  
 
-                          if (handle.classList.contains('jbu-resize-se')) {
 
-  
 
-    
+            }
 
-  
 
-                            const width = originalWidth + (e.pageX - startX);
 
-  
 
-    
 
-  
 
-                            const height = originalHeight + (e.pageY - startY);
 
-  
+          } else if (handle.classList.contains('jbu-resize-s')) {
 
-    
 
-  
 
-                            if (width > minWidth) {
 
-  
 
-    
 
-  
 
-                              element.style.width = width + 'px';
+            const height = originalHeight + (e.pageY - startY);
 
-  
 
-    
 
-  
 
-                            }
 
-  
 
-    
 
-  
+            if (height > minHeight) {
 
-                            if (height > minHeight) {
 
-  
 
-    
 
-  
 
-                              element.style.height = height + 'px';
 
-  
 
-    
+              element.style.height = height + 'px';
 
-  
 
-                            }
 
-  
 
-    
 
-  
 
-                          } else if (handle.classList.contains('jbu-resize-e')) {
 
-  
+            }
 
-    
 
-  
 
-                            const width = originalWidth + (e.pageX - startX);
 
-  
 
-    
 
-  
 
-                            if (width > minWidth) {
+          } else if (handle.classList.contains('jbu-resize-w')) {
 
-  
 
-    
 
-  
 
-                              element.style.width = width + 'px';
 
-  
 
-    
 
-  
+            const width = originalWidth - (e.pageX - startX);
 
-                            }
 
-  
 
-    
 
-  
 
-                          } else if (handle.classList.contains('jbu-resize-s')) {
 
-  
 
-    
+            const left = originalX + (e.pageX - startX);
 
-  
 
-                            const height = originalHeight + (e.pageY - startY);
 
-  
 
-    
 
-  
 
-                            if (height > minHeight) {
 
-  
+            if (width > minWidth) {
 
-    
 
-  
 
-                              element.style.height = height + 'px';
 
-  
 
-    
 
-  
 
-                            }
+              element.style.width = width + 'px';
 
-  
 
-    
 
-  
 
-                          } else if (handle.classList.contains('jbu-resize-w')) {
 
-  
 
-    
 
-  
+              element.style.left = left + 'px';
 
-                            const width = originalWidth - (e.pageX - startX);
 
-  
 
-    
 
-  
 
-                            const left = originalX + (e.pageX - startX);
 
-  
 
-    
+            }
 
-  
 
-                            if (width > minWidth) {
 
-  
 
-    
 
-  
 
-                              element.style.width = width + 'px';
 
-  
+          } else if (handle.classList.contains('jbu-resize-nw')) {
 
-    
 
-  
 
-                              element.style.left = left + 'px';
 
-  
 
-    
 
-  
 
-                            }
+            const width = originalWidth - (e.pageX - startX);
 
-  
 
-    
 
-  
 
-                          } else if (handle.classList.contains('jbu-resize-nw')) {
 
-  
 
-    
 
-  
+            const left = originalX + (e.pageX - startX);
 
-                            const width = originalWidth - (e.pageX - startX);
 
-  
 
-    
 
-  
 
-                            const left = originalX + (e.pageX - startX);
 
-  
 
-    
+            const height = originalHeight - (e.pageY - startY);
 
-  
 
-                            const height = originalHeight - (e.pageY - startY);
 
-  
 
-    
 
-  
 
-                            const top = originalY + (e.pageY - startY);
 
-  
+            const top = originalY + (e.pageY - startY);
 
-    
 
-  
 
-                            if (width > minWidth) {
 
-  
 
-    
 
-  
 
-                              element.style.width = width + 'px';
+            if (width > minWidth) {
 
-  
 
-    
 
-  
 
-                              element.style.left = left + 'px';
 
-  
 
-    
 
-  
+              element.style.width = width + 'px';
 
-                            }
 
-  
 
-    
 
-  
 
-                            if (height > minHeight) {
 
-  
 
-    
+              element.style.left = left + 'px';
 
-  
 
-                              element.style.height = height + 'px';
 
-  
 
-    
 
-  
 
-                              element.style.top = top + 'px';
 
-  
+            }
 
-    
 
-  
 
-                            }
 
-  
 
-    
 
-  
 
-                          } else if (handle.classList.contains('jbu-resize-sw')) {
+            if (height > minHeight) {
 
-  
 
-    
 
-  
 
-                            const width = originalWidth - (e.pageX - startX);
 
-  
 
-    
 
-  
+              element.style.height = height + 'px';
 
-                            const left = originalX + (e.pageX - startX);
 
-  
 
-    
 
-  
 
-                            const height = originalHeight + (e.pageY - startY);
 
-  
 
-    
+              element.style.top = top + 'px';
 
-  
 
-                            if (width > minWidth) {
 
-  
 
-    
 
-  
 
-                              element.style.width = width + 'px';
 
-  
+            }
 
-    
 
-  
 
-                              element.style.left = left + 'px';
 
-  
 
-    
 
-  
 
-                            }
+          } else if (handle.classList.contains('jbu-resize-sw')) {
 
-  
 
-    
 
-  
 
-                            if (height > minHeight) {
 
-  
 
-    
 
-  
+            const width = originalWidth - (e.pageX - startX);
 
-                              element.style.height = height + 'px';
 
-  
 
-    
 
-  
 
-                            }
 
-  
 
-    
+            const left = originalX + (e.pageX - startX);
 
-  
 
-                          }
 
-  
 
-    
 
-  
 
-                        };
 
-  
+            const height = originalHeight + (e.pageY - startY);
 
-    
 
-  
 
-            const stopResize = () => {
 
-  
 
-              window.removeEventListener('mousemove', resize);
 
-  
 
-              window.removeEventListener('mouseup', stopResize);
+            if (width > minWidth) {
 
-  
 
-            };
 
-  
 
-    
 
-  
 
-            window.addEventListener('mousemove', resize);
 
-  
+              element.style.width = width + 'px';
 
-            window.addEventListener('mouseup', stopResize);
 
-  
 
-          });
 
-  
 
-        });
 
-  
 
-      }
+              element.style.left = left + 'px';
 
-  
 
-    
 
-  
 
-      // 工具函数：延时
 
-  
 
-      sleep(ms) {
 
-  
+            }
 
-        return new Promise(resolve => setTimeout(resolve, ms));
 
-  
 
-      }
 
-  }
 
-  
 
-  // 初始化插件
 
-  console.log('即梦批量上传插件脚本已加载');
+            if (height > minHeight) {
 
-  console.log('当前页面:', window.location.hostname);
 
-  
 
-  // 防止重复初始化
 
-  if (window.jimengBatchUploaderInstance) {
 
-    console.log('插件实例已存在，清理旧实例');
 
-    if (window.jimengBatchUploaderInstance.floatingWindow) {
 
-      window.jimengBatchUploaderInstance.floatingWindow.remove();
+              element.style.height = height + 'px';
 
-    }
 
-    window.jimengBatchUploaderInstance = null;
 
-  }
 
-  
 
-  if (window.location.hostname.includes('jimeng.ai') || 
 
-      window.location.hostname.includes('jianyingai.com') ||
 
-      window.location.hostname.includes('jianying.com')) {
+            }
 
-    console.log('检测到即梦页面，正在初始化插件...');
 
-    
 
-    // 清理可能存在的旧插件DOM
 
-    const existingPlugin = document.getElementById('jimeng-batch-uploader');
 
-    if (existingPlugin) {
 
-      console.log('发现旧插件DOM，正在清理...');
 
-      existingPlugin.remove();
+          }
 
-    }
 
-    
 
-    // 等待页面完全加载
 
-    if (document.readyState === 'loading') {
 
-      document.addEventListener('DOMContentLoaded', () => {
 
-        console.log('DOM加载完成，创建插件实例');
 
-        window.jimengBatchUploaderInstance = new JimengBatchUploader();
+        };
+
+
+
+
+
+
+
+        const stopResize = () => {
+
+
+
+          window.removeEventListener('mousemove', resize);
+
+
+
+          window.removeEventListener('mouseup', stopResize);
+
+
+
+        };
+
+
+
+
+
+
+
+        window.addEventListener('mousemove', resize);
+
+
+
+        window.addEventListener('mouseup', stopResize);
+
+
 
       });
 
-    } else {
 
-      console.log('页面已加载，直接创建插件实例');
 
-      window.jimengBatchUploaderInstance = new JimengBatchUploader();
+    });
 
-    }
 
-  } else {
-
-    console.log('非即梦页面，插件不会启动');
 
   }
 
-  
+
+
+
+
+
+
+  // 工具函数：延时
+
+
+
+  sleep(ms) {
+
+
+
+    return new Promise(resolve => setTimeout(resolve, ms));
+
+
+
+  }
+
+}
+
+
+
+// 初始化插件
+
+console.log('即梦批量上传插件脚本已加载');
+
+console.log('当前页面:', window.location.hostname);
+
+
+
+// 防止重复初始化
+
+if (window.jimengBatchUploaderInstance) {
+
+  console.log('插件实例已存在，清理旧实例');
+
+  if (window.jimengBatchUploaderInstance.floatingWindow) {
+
+    window.jimengBatchUploaderInstance.floatingWindow.remove();
+
+  }
+
+  window.jimengBatchUploaderInstance = null;
+
+}
+
+
+
+if (window.location.hostname.includes('jimeng.ai') ||
+
+  window.location.hostname.includes('jianyingai.com') ||
+
+  window.location.hostname.includes('jianying.com')) {
+
+  console.log('检测到即梦页面，正在初始化插件...');
+
+
+
+  // 清理可能存在的旧插件DOM
+
+  const existingPlugin = document.getElementById('jimeng-batch-uploader');
+
+  if (existingPlugin) {
+
+    console.log('发现旧插件DOM，正在清理...');
+
+    existingPlugin.remove();
+
+  }
+
+
+
+  // 等待页面完全加载
+
+  if (document.readyState === 'loading') {
+
+    document.addEventListener('DOMContentLoaded', () => {
+
+      console.log('DOM加载完成，创建插件实例');
+
+      window.jimengBatchUploaderInstance = new JimengBatchUploader();
+
+    });
+
+  } else {
+
+    console.log('页面已加载，直接创建插件实例');
+
+    window.jimengBatchUploaderInstance = new JimengBatchUploader();
+
+  }
+
+} else {
+
+  console.log('非即梦页面，插件不会启动');
+
+}
+
