@@ -949,10 +949,23 @@ class JimengBatchUploader {
       window.characterDatabase[category].forEach(char => {
         const item = document.createElement('div');
         item.className = 'jbu-replace-char-item';
-        item.textContent = char.description;
-        item.addEventListener('click', () => {
-          this.handleCharacterReplacement(char.description);
+        
+        const desc = document.createElement('span');
+        desc.textContent = char.name + '('+ char.description + ')';
+        desc.addEventListener('click', () => {
+          this.handleCharacterReplacement(char.description, char.name);
         });
+
+        const generateBtn = document.createElement('button');
+        generateBtn.className = 'jbu-btn jbu-btn-small jbu-generate-char-from-db';
+        generateBtn.textContent = '生成';
+        generateBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.handleGenerateCharacterFromDb(category, char.name, char.description);
+        });
+
+        item.appendChild(desc);
+        item.appendChild(generateBtn);
         categoryDiv.appendChild(item);
       });
 
@@ -962,30 +975,45 @@ class JimengBatchUploader {
     modal.style.display = 'flex';
   }
 
-  handleCharacterReplacement(newCharDescription) {
+  async handleGenerateCharacterFromDb(category, name, description) {
+    const finalPrompt = `${category}, ${name}, ${description}`;
+    console.log('生成角色:', finalPrompt);
+    
+    try {
+      await this.clearPreviousContent();
+      await this.fillPrompt(finalPrompt);
+      await this.clickGenerate();
+      this.closeCharacterReplaceModal();
+    } catch (error) {
+      console.error('从数据库生成角色失败:', error);
+      alert('生成角色失败，请检查控制台日志。');
+    }
+  }
+
+  handleCharacterReplacement(newCharDescription, newCharName) {
     const oldCharName = this.characterToReplace;
     if (!oldCharName) return;
 
-    // 1. PREPARE NAMES AND REGEX
-    // Extract the new character's name from the full description
-    const newCharNameMatch = newCharDescription.match(/^([^(]+)/);
-    if (!newCharNameMatch) return; // Should not happen with valid data
-    const newCharName = newCharNameMatch[0].trim();
 
-    // Regex for the full definition: OldName (description)
     const escapedOldCharName = oldCharName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-    const oldCharDefinitionRegex = new RegExp(escapedOldCharName + '\\s*\\([^)]*\\)', 'g');
-
-    // Regex for standalone name occurrences. Use word boundaries (\b) to avoid replacing parts of words.
-    const oldCharNameRegex = new RegExp('\\b' + escapedOldCharName + '\\b', 'g');
+    
+    // Regex for ANY occurrence of the old name, with or without a description.
+    // It now handles both English and Chinese parentheses.
+    const descRegexPart = '(?:\\s*[\\(（][^\\)）]*[\\)）])?'; // Optional description part
+    const anyOldCharOccurrenceRegex = new RegExp(escapedOldCharName + descRegexPart, 'g');
 
     // 2. PERFORM REPLACEMENT
     const performReplacement = (prompt) => {
-        // First, replace the full definition block
-        let updatedPrompt = prompt.replace(oldCharDefinitionRegex, newCharDescription);
-        // Then, replace all other standalone occurrences of the old name with the new name
-        updatedPrompt = updatedPrompt.replace(oldCharNameRegex, newCharName);
-        return updatedPrompt;
+      let isFirstMatch = true;
+      
+      return prompt.replace(anyOldCharOccurrenceRegex, () => {
+        if (isFirstMatch) {
+          isFirstMatch = false;
+          return newCharName + '(' + newCharDescription + ')'; // First match gets the full new description
+        } else {
+          return newCharName; // Subsequent matches get just the new name
+        }
+      });
     };
 
     this.storyboards.forEach(sb => {
