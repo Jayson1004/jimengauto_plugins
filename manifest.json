@@ -21,7 +21,7 @@
         "*://jimeng.jianyingai.com/*",
         "*://jimeng.jianying.com/*"
       ],
-      "js": ["content.js"],
+      "js": ["characters.js", "utils.js", "content.js"],
       "css": ["styles.css"],
       "run_at": "document_end",
       "all_frames": false

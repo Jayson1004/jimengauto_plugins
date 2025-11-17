@@ -3,7 +3,7 @@
   position: fixed;
   top: 20px;
   right: 20px;
-  width: 420px;
+  width: 920px;
   background: #1a1a1a;
   border: 1px solid #333;
   border-radius: 8px;
@@ -674,4 +674,83 @@
   width: 10px;
   height: 10px;
   cursor: sw-resize;
+}
+
+/* ---- 角色替换弹窗样式 ---- */
+.jbu-modal {
+  display: none; /* Hidden by default */
+  position: absolute; /* Changed from fixed to absolute to be contained within the main window */
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.7);
+  z-index: 10002; /* Above the main content */
+  justify-content: center;
+  align-items: center;
+}
+
+.jbu-modal-content {
+  background: #2d2d2d;
+  padding: 20px;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 500px;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+}
+
+.jbu-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #444;
+  padding-bottom: 10px;
+  margin-bottom: 15px;
+}
+
+.jbu-modal-title {
+  color: #00d4ff;
+  margin: 0;
+  font-size: 16px;
+}
+
+.jbu-modal-close {
+  background: none;
+  border: none;
+  color: #999;
+  font-size: 24px;
+  cursor: pointer;
+}
+.jbu-modal-close:hover {
+  color: #fff;
+}
+
+.jbu-modal-body {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.jbu-replace-category {
+  margin-bottom: 15px;
+}
+
+.jbu-replace-category-title {
+  font-weight: bold;
+  color: #ccc;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.jbu-replace-char-item {
+  background: #333;
+  padding: 10px;
+  border-radius: 4px;
+  margin-bottom: 5px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.jbu-replace-char-item:hover {
+  background: #00d4ff;
+  color: #000;
 }

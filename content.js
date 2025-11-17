@@ -11,6 +11,7 @@ class JimengBatchUploader {
     this.selectedStyle = ''; // 新增：存储选择的风格
     this.activeTab = 'image'; // 'image' or 'video'
     this.floatingWindow = null;
+    this.characterToReplace = null; // To store the name of the character being replaced
     this.init();
   }
 
@@ -154,6 +155,19 @@ class JimengBatchUploader {
           </div>
         </div>
 
+        <!-- 角色替换弹窗 -->
+        <div id="jbu-character-replace-modal" class="jbu-modal" style="display: none;">
+          <div class="jbu-modal-content">
+            <div class="jbu-modal-header">
+              <h3 class="jbu-modal-title">替换角色</h3>
+              <button class="jbu-modal-close">&times;</button>
+            </div>
+            <div class="jbu-modal-body" id="jbu-replace-char-list">
+              <!-- 角色数据库将在这里渲染 -->
+            </div>
+          </div>
+        </div>
+
       </div>
       <div class="jbu-resize-handle jbu-resize-se"></div>
       <div class="jbu-resize-handle jbu-resize-e"></div>
@@ -266,6 +280,12 @@ class JimengBatchUploader {
     });
     container.querySelector('.jbu-video-stop').addEventListener('click', () => {
       this.stopUpload();
+    });
+
+    // --- Modal Events ---
+    const modal = document.getElementById('jbu-character-replace-modal');
+    modal.querySelector('.jbu-modal-close').addEventListener('click', () => {
+      this.closeCharacterReplaceModal();
     });
   }
 
@@ -434,59 +454,7 @@ class JimengBatchUploader {
   }
 
 
-   // 专业CSV解析器
-  _parseCSV(str) {
-    const result = [];
-    let currentRow = [];
-    let currentField = '';
-    let inQuotedField = false;
-    for (let i = 0; i < str.length; i++) {
-      const char = str[i];
-      const nextChar = str[i + 1];
-      if (inQuotedField) {
-        if (char === '"') {
-          if (nextChar === '"') { // 处理转义引号 ""
-            currentField += '"';
-            i++; // 跳过下一个引号
-          } else {
-            inQuotedField = false; // 引号字段结束
-          }
-        } else {
-          currentField += char;
-        }
-      } else {
-        if (char === '"') {
-          inQuotedField = true;
-        } else if (char === ',') {
-          currentRow.push(currentField);
-          currentField = '';
-        } else if (char === '\n' || char === '\r') {
-          currentRow.push(currentField);
-          result.push(currentRow);
-          currentRow = [];
-          currentField = '';
-          // 处理 Windows 的 \r\n
-          if (char === '\r' && nextChar === '\n') {
-            i++;
-          }
-        } else {
-          currentField += char;
-        }
-      }
-    }
-    // 添加最后一行
-    if (currentField || currentRow.length > 0) {
-      currentRow.push(currentField);
-      result.push(currentRow);
-    }
-    // 清理可能因文件末尾换行符产生的空行
-    if (result.length > 0 && result[result.length - 1].every(field => field === '')) {
-      result.pop();
-    }
-    return result;
-  }
   // 批量导入提示词 (CSV)
-
   handlePromptImport(file) {
     if (!file) return;
     const reader = new FileReader();
@@ -510,7 +478,7 @@ class JimengBatchUploader {
         return;
       }
 
-      const data = this._parseCSV(content);
+      const data = parseCSV(content);
       if (data.length <= 1) {
         alert('CSV文件为空或格式不正确。');
         
@@ -525,10 +493,13 @@ class JimengBatchUploader {
         alert('CSV文件第二列应为分镜提示词。');
         return 
       }
-      // if(data0_arr[2].indexOf('动作提示词') < 0) {
-      //   alert('CSV文件第三列应为动作提示词。');
-      //   return 
-      // }
+      if(data0_arr[2].indexOf('动作提示词') < 0) {
+        alert('CSV文件第三列应为动作提示词。');
+        return 
+      }
+      // 清空列表
+      this.storyboards = []
+      this.videos = []
       // 跳过表头处理数据
       data.slice(1).forEach(row => {
         if (row && row.length > 1) {
@@ -548,18 +519,7 @@ class JimengBatchUploader {
     };
 
     reader.readAsArrayBuffer(file);
-
-
-
   }
-
-
-
-
-
-
-
- 
 
 
   // ---- 视频列表功能 ----
@@ -585,1360 +545,168 @@ class JimengBatchUploader {
 
     this.videos.forEach((video, index) => {
       const videoDiv = document.createElement('div');
-
-
-
-
-
-
-
       videoDiv.className = `jbu-storyboard ${video.status}`; // 使用jbu-storyboard样式
-
-
-
-
-
-
-
       videoDiv.draggable = true; // 允许拖拽
-
-
-
-
-
-
-
       videoDiv.dataset.index = index;
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
       const imagePreview = video.image
-
-
-
-
-
-
-
         ? `<div class="jbu-image-preview">
-
-  
-
-    
-
-  
-
                       <img src="${URL.createObjectURL(video.image)}" alt="预览">
-
-  
-
-    
-
-  
-
                       <button class="jbu-remove-image" data-id="${video.id}">×</button>
-
-  
-
-    
-
-  
-
                     </div>`
-
-
-
-
-
-
-
         : `<div class="jbu-image-preview jbu-image-placeholder"></div>`;
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
       videoDiv.innerHTML = `
-
-  
-
-    
-
-  
-
                   <div class="jbu-storyboard-header">
-
-  
-
-    
-
-  
-
                     <span class="jbu-storyboard-name">${video.name}</span>
-
-  
-
-    
-
-  
-
                     <span class="jbu-storyboard-status">${this.getStatusText(video.status)}</span>
-
-  
-
-    
-
-  
-
                     <button class="jbu-delete-video" data-id="${video.id}">×</button>
-
-  
-
-    
-
-  
-
                   </div>
-
-  
-
-    
-
-  
-
                   <div class="jbu-storyboard-content">
-
-  
-
-    
-
-  
-
                     <div class="jbu-images">
-
-  
-
-    
-
-  
-
                       ${imagePreview}
-
-  
-
-    
-
-  
-
                       ${!video.image ? `<button class="jbu-add-image" data-id="${video.id}">+</button>` : ''}
-
-  
-
-    
-
-  
-
                     </div>
-
-  
-
-    
-
-  
-
                     <textarea class="jbu-prompt" placeholder="输入视频提示词..." data-id="${video.id}">${video.prompt}</textarea>
-
-  
-
-    
-
-  
-
                   </div>
-
-  
-
-    
-
-  
-
                 `;
-
-
-
-
-
-
-
       listContainer.appendChild(videoDiv);
-
-
-
-
-
-
-
     });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     this.bindVideoEvents();
-
-
-
-
-
-
-
     this.setupVideoDragAndDrop(); // 添加视频拖拽
-
-
-
-
-
-
-
   }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
   bindVideoEvents() {
-
-
-
-
-
-
-
     // 添加图片按钮
-
-
-
-
-
-
-
     document.querySelectorAll('#jbu-video-list .jbu-add-image').forEach(btn => {
-
-
-
-
-
-
-
       btn.addEventListener('click', (e) => {
-
-
-
-
-
-
-
         const id = parseInt(e.target.dataset.id);
-
-
-
-
-
-
-
         this.addImageToVideo(id);
-
-
-
-
-
-
-
       });
-
-
-
-
-
-
-
     });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     // 删除图片按钮
-
-
-
-
-
-
-
     document.querySelectorAll('#jbu-video-list .jbu-remove-image').forEach(btn => {
-
-
-
-
-
-
-
       btn.addEventListener('click', (e) => {
-
-
-
-
-
-
-
         const id = parseInt(e.target.dataset.id);
-
-
-
-
-
-
-
         this.removeImageFromVideo(id);
-
-
-
-
-
-
-
       });
-
-
-
-
-
-
-
     });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     // 更新提示词
-
-
-
-
-
-
-
     document.querySelectorAll('#jbu-video-list .jbu-prompt').forEach(textarea => {
-
-
-
-
-
-
-
       textarea.addEventListener('input', (e) => {
-
-
-
-
-
-
-
         const id = parseInt(e.target.dataset.id);
-
-
-
-
-
-
-
         const video = this.videos.find(v => v.id === id);
-
-
-
-
-
-
-
         if (video) {
-
-
-
-
-
-
-
           video.prompt = e.target.value;
-
-
-
-
-
-
-
         }
-
-
-
-
-
-
-
       });
-
-
-
-
-
-
-
     });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     // 删除视频
-
-
-
-
-
-
-
     document.querySelectorAll('.jbu-delete-video').forEach(btn => {
-
-
-
-
-
-
-
       btn.addEventListener('click', (e) => {
-
-
-
-
-
-
-
         const id = parseInt(e.target.dataset.id);
-
-
-
-
-
-
-
         this.videos = this.videos.filter(v => v.id !== id);
-
-
-
-
-
-
-
         this.reorderVideos(); // 重新排序视频名称
-
-
-
-
-
-
-
         this.renderVideos();
-
-
-
-
-
-
-
       });
-
-
-
-
-
-
-
     });
-
-
-
-
-
-
-
   }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
   setupVideoDragAndDrop() {
-
-
-
-
-
-
-
     const listContainer = document.getElementById('jbu-video-list');
-
-
-
-
-
-
-
     let draggedElement = null;
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     listContainer.addEventListener('dragstart', (e) => {
-
-
-
-
-
-
-
       draggedElement = e.target;
-
-
-
-
-
-
-
       e.target.style.opacity = '0.5';
-
-
-
-
-
-
-
     });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     listContainer.addEventListener('dragend', (e) => {
-
-
-
-
-
-
-
       e.target.style.opacity = '';
-
-
-
-
-
-
-
       draggedElement = null;
-
-
-
-
-
-
-
     });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     listContainer.addEventListener('dragover', (e) => {
-
-
-
-
-
-
-
       e.preventDefault();
-
-
-
-
-
-
-
     });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     listContainer.addEventListener('drop', (e) => {
-
-
-
-
-
-
-
       e.preventDefault();
-
-
-
-
-
-
-
       if (draggedElement && e.target.classList.contains('jbu-storyboard')) {
-
-
-
-
-
-
-
         const fromIndex = parseInt(draggedElement.dataset.index);
-
-
-
-
-
-
-
         const toIndex = parseInt(e.target.dataset.index);
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         // 重新排序数组
-
-
-
-
-
-
-
         const item = this.videos.splice(fromIndex, 1)[0];
-
-
-
-
-
-
-
         this.videos.splice(toIndex, 0, item);
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         this.renderVideos();
-
-
-
-
-
-
-
       }
-
-
-
-
-
-
-
     });
-
-
-
-
-
-
-
   }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
   reorderVideos() {
-
-
-
-
-
-
-
     this.videos.forEach((video, index) => {
-
-
-
-
-
-
-
       video.name = `视频${index + 1}`;
-
-
-
-
-
-
-
     });
-
-
-
-
-
-
-
   }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
   handleVideoBatchImport(files) {
-
-
-
-
-
-
-
     Array.from(files).forEach((file, index) => {
-
-
-
-
-
-
-
       if (index < this.videos.length) {
-
-
-
-
-
-
-
         this.videos[index].image = file;
-
-
-
-
-
-
-
       }
-
-
-
-
-
-
-
     });
-
-
-
-
-
-
-
     this.renderVideos();
-
-
-
-
-
-
-
   }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
   addImageToVideo(videoId) {
-
-
-
-
-
-
-
     const fileInput = document.createElement('input');
-
-
-
-
-
-
-
     fileInput.type = 'file';
-
-
-
-
-
-
-
     fileInput.accept = 'image/*';
-
-
-
-
-
-
-
     fileInput.style.display = 'none';
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     fileInput.addEventListener('change', (e) => {
-
-
-
-
-
-
-
       const file = e.target.files[0];
-
-
-
-
-
-
-
       const video = this.videos.find(v => v.id === videoId);
-
-
-
-
-
-
-
       if (video && file) {
-
-
-
-
-
-
-
         video.image = file;
-
-
-
-
-
-
-
         this.renderVideos();
-
-
-
-
-
-
-
       }
-
-
-
-
-
-
-
       document.body.removeChild(fileInput);
-
-
-
-
-
-
-
     });
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     document.body.appendChild(fileInput);
-
-
-
-
-
-
-
     fileInput.click();
-
-
-
-
-
-
-
   }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
   removeImageFromVideo(videoId) {
-
-
-
-
-
-
-
     const video = this.videos.find(v => v.id === videoId);
-
-
-
-
-
-
-
     if (video) {
-
-
-
-
-
-
-
       video.image = null;
-
-
-
-
-
-
-
       this.renderVideos();
-
-
-
-
-
-
-
     }
-
-
-
-
-
-
-
   }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
   clearVideos() {
-
-
-
-
-
-
-
     if (confirm('确定要清空所有视频任务吗？')) {
-
-
-
-
-
-
-
       this.videos = [];
-
-
-
-
-
-
-
       this.renderVideos();
-
-
-
-
-
-
-
     }
-
-
-
-
-
-
-
   }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
   // ---- END 视频列表功能 ----
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-  // ---- 角色列表功能 ----
-
-
-
   // 从所有分镜中更新角色列表并渲染
-
   updateAndRenderCharacters() {
-
-    const allPrompts = this.storyboards.map(s => s.prompt);
-
-    const characterNames = new Set();
-
-
-
-    allPrompts.forEach(prompt => {
-
-      const extracted = this._extractCharactersFromPrompt(prompt);
-
-      extracted.forEach(name => characterNames.add(name));
-
-    });
-
-
-
-    // 更新 this.characters 数组，保留已有图片
-
-    const newCharacters = [];
-
-    characterNames.forEach(name => {
-
-      const existing = this.characters.find(c => c.name === name);
-
-      if (existing) {
-
-        newCharacters.push(existing);
-
-      } else {
-
-        newCharacters.push({ name, image: null });
-
-      }
-
-    });
-
-    this.characters = newCharacters;
-
-
-
+    this.characters = updateCharacters(this.storyboards, this.characters);
     this.renderCharacters();
-
-  }
-
-
-
-  // 从单个提示词中提取角色名称
-
-
-
-  _extractCharactersFromPrompt(prompt) {
-    if (!prompt) return [];
-
-    // 1. Normalize prompt: replace Chinese symbols, newlines, and '*'
-    // This makes the matching logic simpler and more robust.
-    let processedPrompt = prompt
-        .replace(/<br\s*\/?>|\n/gi, ' ') // handle newlines
-        .replace(/：/g, ':')
-        .replace(/；/g, ';')
-        .replace(/（/g, '(')
-        .replace(/）/g, ')')
-        .replace(/\*/g, ' '); // treat '*' as a space separator
-
-    // 2. Extract the block of text containing character definitions
-    const roleMatch = processedPrompt.match(/角色:\s*([^;]+)/);
-    if (!roleMatch || !roleMatch[1]) {
-        return [];
-    }
-    const charactersBlock = roleMatch[1];
-
-    // 3. Find all "name(description)" chunks.
-    // This regex handles names with spaces, e.g., "Mickey Mouse (a mouse)".
-    const characterChunkRegex = /[^()]+?\s*\([^)]*\)/g;
-    const chunks = charactersBlock.match(characterChunkRegex);
-
-    if (!chunks) {
-        return [];
-    }
-
-    const characterNames = new Set();
-    chunks.forEach(chunk => {
-        // 4. From each chunk, extract just the name part.
-        const parenIndex = chunk.indexOf('(');
-        const name = chunk.substring(0, parenIndex).trim();
-        if (name) {
-            characterNames.add(name);
-        }
-    });
-
-    // 5. Return a unique list of names.
-    return Array.from(characterNames);
   }
 
 
@@ -1995,9 +763,11 @@ class JimengBatchUploader {
 
             <span class="jbu-character-name">${char.name}</span>
 
-            <button class="jbu-btn jbu-btn-small jbu-upload-char-image" data-name="${char.name}">上传图片</button>
+                        <button class="jbu-btn jbu-btn-small jbu-upload-char-image" data-name="${char.name}">上传图片</button>
 
-          </div>
+                        <button class="jbu-btn jbu-btn-small jbu-replace-char" data-name="${char.name}">替换角色</button>
+
+                      </div>
 
         `;
 
@@ -2055,17 +825,59 @@ class JimengBatchUploader {
 
 
 
-    document.querySelectorAll('.jbu-remove-char-image').forEach(btn => {
+        document.querySelectorAll('.jbu-remove-char-image').forEach(btn => {
 
-      btn.addEventListener('click', (e) => {
 
-        const name = e.target.dataset.name;
 
-        this.removeCharacterImage(name);
+          btn.addEventListener('click', (e) => {
 
-      });
 
-    });
+
+            const name = e.target.dataset.name;
+
+
+
+            this.removeCharacterImage(name);
+
+
+
+          });
+
+
+
+        });
+
+
+
+    
+
+
+
+        document.querySelectorAll('.jbu-replace-char').forEach(btn => {
+
+
+
+          btn.addEventListener('click', (e) => {
+
+
+
+            e.preventDefault();
+
+
+
+            const name = e.target.dataset.name;
+
+
+
+            this.openCharacterReplaceModal(name);
+
+
+
+          });
+
+
+
+        });
 
   }
 
@@ -2114,6 +926,91 @@ class JimengBatchUploader {
 
 
   // ---- END 角色列表功能 ----
+
+
+  // ---- 角色替换功能 ----
+
+  openCharacterReplaceModal(characterName) {
+    this.characterToReplace = characterName;
+    const modal = document.getElementById('jbu-character-replace-modal');
+    const listContainer = document.getElementById('jbu-replace-char-list');
+    
+    listContainer.innerHTML = ''; // Clear previous list
+
+    for (const category in window.characterDatabase) {
+      const categoryDiv = document.createElement('div');
+      categoryDiv.className = 'jbu-replace-category';
+      
+      const title = document.createElement('h4');
+      title.className = 'jbu-replace-category-title';
+      title.textContent = category;
+      categoryDiv.appendChild(title);
+
+      window.characterDatabase[category].forEach(char => {
+        const item = document.createElement('div');
+        item.className = 'jbu-replace-char-item';
+        item.textContent = char.description;
+        item.addEventListener('click', () => {
+          this.handleCharacterReplacement(char.description);
+        });
+        categoryDiv.appendChild(item);
+      });
+
+      listContainer.appendChild(categoryDiv);
+    }
+
+    modal.style.display = 'flex';
+  }
+
+  handleCharacterReplacement(newCharDescription) {
+    const oldCharName = this.characterToReplace;
+    if (!oldCharName) return;
+
+    // 1. PREPARE NAMES AND REGEX
+    // Extract the new character's name from the full description
+    const newCharNameMatch = newCharDescription.match(/^([^(]+)/);
+    if (!newCharNameMatch) return; // Should not happen with valid data
+    const newCharName = newCharNameMatch[0].trim();
+
+    // Regex for the full definition: OldName (description)
+    const escapedOldCharName = oldCharName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const oldCharDefinitionRegex = new RegExp(escapedOldCharName + '\\s*\\([^)]*\\)', 'g');
+
+    // Regex for standalone name occurrences. Use word boundaries (\b) to avoid replacing parts of words.
+    const oldCharNameRegex = new RegExp('\\b' + escapedOldCharName + '\\b', 'g');
+
+    // 2. PERFORM REPLACEMENT
+    const performReplacement = (prompt) => {
+        // First, replace the full definition block
+        let updatedPrompt = prompt.replace(oldCharDefinitionRegex, newCharDescription);
+        // Then, replace all other standalone occurrences of the old name with the new name
+        updatedPrompt = updatedPrompt.replace(oldCharNameRegex, newCharName);
+        return updatedPrompt;
+    };
+
+    this.storyboards.forEach(sb => {
+      sb.prompt = performReplacement(sb.prompt);
+    });
+
+    this.videos.forEach(video => {
+      video.prompt = performReplacement(video.prompt);
+    });
+
+    // 3. FINALIZE AND RE-RENDER
+    this.closeCharacterReplaceModal();
+    this.updateAndRenderCharacters();
+    this.renderStoryboards();
+    this.renderVideos();
+  }
+
+  closeCharacterReplaceModal() {
+    const modal = document.getElementById('jbu-character-replace-modal');
+    modal.style.display = 'none';
+    this.characterToReplace = null;
+  }
+
+  // ---- END 角色替换功能 ----
+
 
 
 
@@ -2683,7 +1580,7 @@ console.log(modeElement)
 
       // 查找与当前提示词匹配的角色，并添加其参考图
 
-      const mentionedCharacters = this._extractCharactersFromPrompt(storyboard.prompt);
+      const mentionedCharacters = extractCharactersFromPrompt(storyboard.prompt);
 
       mentionedCharacters.forEach(name => {
 
@@ -3834,7 +2731,7 @@ console.log(modeElement)
 
             right: 20px;
 
-            width: 420px;
+            width: 920px;
 
             height: auto;
 
