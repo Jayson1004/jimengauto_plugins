@@ -133,3 +133,42 @@ function updateCharacters(storyboards, existingCharacters) {
   
   return newCharacters;
 }
+
+/**
+ * 导出提示词为CSV格式字符串
+ * @param {Array<object>} storyboards 分镜列表
+ * @param {Array<object>} videos 视频列表
+ * @returns {string} CSV格式字符串
+ */
+function exportPromptsToCSV(storyboards, videos) {
+  const escapeCSV = (field) => {
+    if (field === null || field === undefined) {
+      return '';
+    }
+    const str = String(field);
+    // 如果字段包含逗号、引号或换行符，则用双引号括起来
+    if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+      // 将字段内的双引号替换为两个双引号
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+  };
+
+  const header = ['分镜数', '分镜提示词', '动作提示词'];
+  const rows = [header];
+  
+  const maxLen = Math.max(storyboards.length, videos.length);
+
+  for (let i = 0; i < maxLen; i++) {
+    const storyboardPrompt = storyboards[i] ? storyboards[i].prompt : '';
+    const videoPrompt = videos[i] ? videos[i].prompt : '';
+    
+    rows.push([
+      `分镜${i + 1}`,
+      escapeCSV(storyboardPrompt),
+      escapeCSV(videoPrompt)
+    ]);
+  }
+
+  return rows.map(row => row.join(',')).join('\n');
+}

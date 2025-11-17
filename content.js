@@ -49,8 +49,8 @@ class JimengBatchUploader {
         <div class="jbu-tab-panel" id="jbu-image-panel">
           <div class="jbu-controls">
             <button class="jbu-btn jbu-add-storyboard">添加分镜</button>
-            <!-- <button class="jbu-btn jbu-batch-import">批量导入图片</button> -->
             <button class="jbu-btn jbu-import-prompts">导入提示词</button>
+            <button class="jbu-btn jbu-export-prompts">导出CSV提示词</button>
             <input type="file" id="jbu-file-input" multiple accept="image/*" style="display: none;">
             <input type="file" id="jbu-prompt-file-input" accept=".csv" style="display: none;">
           </div>
@@ -233,6 +233,9 @@ class JimengBatchUploader {
     // });
     container.querySelector('.jbu-import-prompts').addEventListener('click', () => {
       document.getElementById('jbu-prompt-file-input').click();
+    });
+    container.querySelector('.jbu-export-prompts').addEventListener('click', () => {
+      this.handleExportPrompts();
     });
     document.getElementById('jbu-file-input').addEventListener('change', (e) => {
       this.handleBatchImport(e.target.files);
@@ -519,6 +522,19 @@ class JimengBatchUploader {
     };
 
     reader.readAsArrayBuffer(file);
+  }
+
+  handleExportPrompts() {
+    const csvContent = exportPromptsToCSV(this.storyboards, this.videos);
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'prompts.csv');
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   }
 
 
