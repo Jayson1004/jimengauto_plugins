@@ -48,7 +48,7 @@ class JimengBatchUploader {
         <div class="jbu-tab-panel" id="jbu-image-panel">
           <div class="jbu-controls">
             <button class="jbu-btn jbu-add-storyboard">添加分镜</button>
-            <button class="jbu-btn jbu-batch-import">批量导入图片</button>
+            <!-- <button class="jbu-btn jbu-batch-import">批量导入图片</button> -->
             <button class="jbu-btn jbu-import-prompts">导入提示词</button>
             <input type="file" id="jbu-file-input" multiple accept="image/*" style="display: none;">
             <input type="file" id="jbu-prompt-file-input" accept=".csv" style="display: none;">
@@ -214,9 +214,9 @@ class JimengBatchUploader {
     container.querySelector('.jbu-add-storyboard').addEventListener('click', () => {
       this.addStoryboard();
     });
-    container.querySelector('.jbu-batch-import').addEventListener('click', () => {
-      document.getElementById('jbu-file-input').click();
-    });
+    // container.querySelector('.jbu-batch-import').addEventListener('click', () => {
+    //   document.getElementById('jbu-file-input').click();
+    // });
     container.querySelector('.jbu-import-prompts').addEventListener('click', () => {
       document.getElementById('jbu-prompt-file-input').click();
     });
@@ -261,6 +261,12 @@ class JimengBatchUploader {
     container.querySelector('.jbu-video-start').addEventListener('click', () => {
       this.startVideoGeneration();
     });
+    container.querySelector('.jbu-video-pause').addEventListener('click', () => {
+      this.pauseUpload();
+    });
+    container.querySelector('.jbu-video-stop').addEventListener('click', () => {
+      this.stopUpload();
+    });
   }
 
   // ... (existing image generation functions)
@@ -293,6 +299,7 @@ class JimengBatchUploader {
     this.currentIndex = 0;
 
     // TODO: Update buttons for video tab
+    this.updateButtons();
     this.renderVideos();
     await this.processNextVideo();
   }
@@ -300,6 +307,11 @@ class JimengBatchUploader {
   async processNextVideo() {
     if (!this.isRunning || this.isPaused) {
       return;
+    }
+
+    // 跳过已完成的视频
+    while (this.currentIndex < this.videos.length && this.videos[this.currentIndex].status === 'completed') {
+      this.currentIndex++;
     }
 
     if (this.currentIndex >= this.videos.length) {
@@ -376,7 +388,7 @@ class JimengBatchUploader {
       // 3. 点击生成按钮
       console.log('步骤3: 点击生成按钮...');
       try {
-        // await this.clickGenerate();
+        await this.clickGenerate();
         console.log('✓ 生成按钮点击成功');
       } catch (error) {
         console.error('✗ 生成按钮点击失败:', error.message);
@@ -501,8 +513,22 @@ class JimengBatchUploader {
       const data = this._parseCSV(content);
       if (data.length <= 1) {
         alert('CSV文件为空或格式不正确。');
+        
         return;
       }
+      const data0_arr = data[0]
+      if(data0_arr[0].indexOf('分镜数') < 0) {
+        alert('CSV文件第一列应为分镜数。');
+        return 
+      }
+      if(data0_arr[1].indexOf('分镜提示词') < 0) {
+        alert('CSV文件第二列应为分镜提示词。');
+        return 
+      }
+      // if(data0_arr[2].indexOf('动作提示词') < 0) {
+      //   alert('CSV文件第三列应为动作提示词。');
+      //   return 
+      // }
       // 跳过表头处理数据
       data.slice(1).forEach(row => {
         if (row && row.length > 1) {
@@ -1873,89 +1899,46 @@ class JimengBatchUploader {
 
 
   _extractCharactersFromPrompt(prompt) {
-
-
-
     if (!prompt) return [];
 
+    // 1. Normalize prompt: replace Chinese symbols, newlines, and '*'
+    // This makes the matching logic simpler and more robust.
+    let processedPrompt = prompt
+        .replace(/<br\s*\/?>|\n/gi, ' ') // handle newlines
+        .replace(/：/g, ':')
+        .replace(/；/g, ';')
+        .replace(/（/g, '(')
+        .replace(/）/g, ')')
+        .replace(/\*/g, ' '); // treat '*' as a space separator
 
-
-
-
-
-
-    const characters = [];
-
-
-
-    const roleMatch = prompt.match(/角色:\s*([^;]+)/);
-
-
-
-    if (!roleMatch || !roleMatch[1]) return [];
-
-
-
-
-
-
-
+    // 2. Extract the block of text containing character definitions
+    const roleMatch = processedPrompt.match(/角色:\s*([^;]+)/);
+    if (!roleMatch || !roleMatch[1]) {
+        return [];
+    }
     const charactersBlock = roleMatch[1];
 
+    // 3. Find all "name(description)" chunks.
+    // This regex handles names with spaces, e.g., "Mickey Mouse (a mouse)".
+    const characterChunkRegex = /[^()]+?\s*\([^)]*\)/g;
+    const chunks = charactersBlock.match(characterChunkRegex);
 
+    if (!chunks) {
+        return [];
+    }
 
-    const characterParts = charactersBlock.split('*');
-
-
-
-
-
-
-
-    characterParts.forEach(part => {
-
-
-
-      const openParenIndex = part.indexOf('(');
-
-
-
-      if (openParenIndex > 0) { // 确保括号前有内容
-
-
-
-        const potentialName = part.substring(0, openParenIndex).trim();
-
-
-
-        if (potentialName) {
-
-
-
-          characters.push(potentialName);
-
-
-
+    const characterNames = new Set();
+    chunks.forEach(chunk => {
+        // 4. From each chunk, extract just the name part.
+        const parenIndex = chunk.indexOf('(');
+        const name = chunk.substring(0, parenIndex).trim();
+        if (name) {
+            characterNames.add(name);
         }
-
-
-
-      }
-
-
-
     });
 
-
-
-
-
-
-
-    return characters;
-
-
-
+    // 5. Return a unique list of names.
+    return Array.from(characterNames);
   }
 
 
@@ -2487,7 +2470,7 @@ class JimengBatchUploader {
     // 检查是否选择了“图片生成”
 
     const modeElement = document.querySelector('div[class^="dimension-layout-"] div[class^="toolbar-settings-"] .lv-select-view .lv-select-view-value');
-
+console.log(modeElement)
     if (!modeElement || !modeElement.textContent.includes('图片生成')) {
 
       alert('请先在即梦输入框底部工具栏手动选择“图片生成”模式，然后再开始上传。');
@@ -2552,31 +2535,41 @@ class JimengBatchUploader {
 
   // 处理下一个分镜
 
-  async processNextStoryboard() {
+    async processNextStoryboard() {
 
-    console.log(`processNextStoryboard: 当前索引=${this.currentIndex}, 总数=${this.storyboards.length}, 运行状态=${this.isRunning}, 暂停状态=${this.isPaused}`);
+      console.log(`processNextStoryboard: 当前索引=${this.currentIndex}, 总数=${this.storyboards.length}, 运行状态=${this.isRunning}, 暂停状态=${this.isPaused}`);
 
+  
 
+      if (!this.isRunning || this.isPaused) {
 
-    if (!this.isRunning || this.isPaused) {
+        console.log('停止处理：运行状态或暂停状态不允许继续');
 
-      console.log('停止处理：运行状态或暂停状态不允许继续');
+        return;
 
-      return;
+      }
 
-    }
+  
 
+      // 跳过已完成的分镜
 
+      while (this.currentIndex < this.storyboards.length && this.storyboards[this.currentIndex].status === 'completed') {
 
-    if (this.currentIndex >= this.storyboards.length) {
+        this.currentIndex++;
 
-      console.log('所有分镜处理完成，调用completeUpload');
+      }
 
-      this.completeUpload();
+  
 
-      return;
+      if (this.currentIndex >= this.storyboards.length) {
 
-    }
+        console.log('所有分镜处理完成，调用completeUpload');
+
+        this.completeUpload();
+
+        return;
+
+      }
 
 
 
@@ -3649,29 +3642,103 @@ class JimengBatchUploader {
 
 
 
-  // 更新按钮状态
-
-  updateButtons() {
-
-    const startBtn = this.floatingWindow.querySelector('.jbu-start');
-
-    const pauseBtn = this.floatingWindow.querySelector('.jbu-pause');
-
-    const stopBtn = this.floatingWindow.querySelector('.jbu-stop');
+    // 更新按钮状态
 
 
 
-    startBtn.disabled = this.isRunning;
-
-    pauseBtn.disabled = !this.isRunning;
-
-    stopBtn.disabled = !this.isRunning;
+    updateButtons() {
 
 
 
-    pauseBtn.textContent = this.isPaused ? '继续' : '暂停';
+      if (this.activeTab === 'image') {
 
-  }
+
+
+        const startBtn = this.floatingWindow.querySelector('.jbu-start');
+
+
+
+        const pauseBtn = this.floatingWindow.querySelector('.jbu-pause');
+
+
+
+        const stopBtn = this.floatingWindow.querySelector('.jbu-stop');
+
+
+
+        if (!startBtn || !pauseBtn || !stopBtn) return;
+
+
+
+  
+
+
+
+        startBtn.disabled = this.isRunning;
+
+
+
+        pauseBtn.disabled = !this.isRunning;
+
+
+
+        stopBtn.disabled = !this.isRunning;
+
+
+
+        pauseBtn.textContent = this.isPaused ? '继续' : '暂停';
+
+
+
+  
+
+
+
+      } else if (this.activeTab === 'video') {
+
+
+
+        const startBtn = this.floatingWindow.querySelector('.jbu-video-start');
+
+
+
+        const pauseBtn = this.floatingWindow.querySelector('.jbu-video-pause');
+
+
+
+        const stopBtn = this.floatingWindow.querySelector('.jbu-video-stop');
+
+
+
+        if (!startBtn || !pauseBtn || !stopBtn) return;
+
+
+
+  
+
+
+
+        startBtn.disabled = this.isRunning;
+
+
+
+        pauseBtn.disabled = !this.isRunning;
+
+
+
+        stopBtn.disabled = !this.isRunning;
+
+
+
+        pauseBtn.textContent = this.isPaused ? '继续' : '暂停';
+
+
+
+      }
+
+
+
+    }
 
 
 
@@ -3767,7 +3834,7 @@ class JimengBatchUploader {
 
             right: 20px;
 
-            width: 320px;
+            width: 420px;
 
             height: auto;
 
