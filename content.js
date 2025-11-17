@@ -168,6 +168,20 @@ class JimengBatchUploader {
           </div>
         </div>
 
+        <!-- 角色编辑弹窗 -->
+        <div id="jbu-character-edit-modal" class="jbu-modal" style="display: none;">
+          <div class="jbu-modal-content">
+            <div class="jbu-modal-header">
+              <h3 class="jbu-modal-title">编辑角色描述</h3>
+              <button class="jbu-modal-close">&times;</button>
+            </div>
+            <div class="jbu-modal-body">
+              <textarea id="jbu-char-edit-textarea" class="jbu-prompt" style="width: 100%; min-height: 100px;"></textarea>
+              <button id="jbu-save-char-edit" class="jbu-btn" style="width: 100%; margin-top: 10px;">保存</button>
+            </div>
+          </div>
+        </div>
+
       </div>
       <div class="jbu-resize-handle jbu-resize-se"></div>
       <div class="jbu-resize-handle jbu-resize-e"></div>
@@ -289,6 +303,14 @@ class JimengBatchUploader {
     const modal = document.getElementById('jbu-character-replace-modal');
     modal.querySelector('.jbu-modal-close').addEventListener('click', () => {
       this.closeCharacterReplaceModal();
+    });
+
+    const editModal = document.getElementById('jbu-character-edit-modal');
+    editModal.querySelector('.jbu-modal-close').addEventListener('click', () => {
+      this.closeCharacterEditModal();
+    });
+    editModal.querySelector('#jbu-save-char-edit').addEventListener('click', () => {
+      this.saveCharacterEdit();
     });
   }
 
@@ -966,22 +988,38 @@ class JimengBatchUploader {
         const item = document.createElement('div');
         item.className = 'jbu-replace-char-item';
         
-        const desc = document.createElement('span');
-        desc.textContent = char.name + '('+ char.description + ')';
-        desc.addEventListener('click', () => {
-          this.handleCharacterReplacement(char.description, char.name);
+        // Click listener for the whole item to trigger replacement
+        item.addEventListener('click', () => {
+            this.handleCharacterReplacement(char.description, char.name);
         });
+
+        const desc = document.createElement('span');
+        desc.textContent = char.name + '(' + char.description + ')';
+
+        const btnWrapper = document.createElement('div');
+        btnWrapper.className = 'jbu-item-btn-wrapper';
 
         const generateBtn = document.createElement('button');
         generateBtn.className = 'jbu-btn jbu-btn-small jbu-generate-char-from-db';
         generateBtn.textContent = '生成';
         generateBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          this.handleGenerateCharacterFromDb(category, char.name, char.description);
+            e.stopPropagation();
+            this.handleGenerateCharacterFromDb(category, char.name, char.description);
         });
 
+        const editBtn = document.createElement('button');
+        editBtn.className = 'jbu-btn jbu-btn-small jbu-edit-char-desc';
+        editBtn.textContent = '编辑';
+        editBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.openCharacterEditModal(category, char.name);
+        });
+
+        btnWrapper.appendChild(generateBtn);
+        btnWrapper.appendChild(editBtn);
+
         item.appendChild(desc);
-        item.appendChild(generateBtn);
+        item.appendChild(btnWrapper);
         categoryDiv.appendChild(item);
       });
 
@@ -989,6 +1027,42 @@ class JimengBatchUploader {
     }
 
     modal.style.display = 'flex';
+  }
+
+  openCharacterEditModal(category, charName) {
+    const modal = document.getElementById('jbu-character-edit-modal');
+    const textarea = document.getElementById('jbu-char-edit-textarea');
+    const charToEdit = window.characterDatabase[category].find(c => c.name === charName);
+
+    if (charToEdit) {
+        modal.dataset.category = category;
+        modal.dataset.charName = charName;
+        textarea.value = charToEdit.description;
+        modal.style.display = 'flex';
+    }
+  }
+
+  closeCharacterEditModal() {
+      const modal = document.getElementById('jbu-character-edit-modal');
+      modal.style.display = 'none';
+  }
+
+  saveCharacterEdit() {
+      const modal = document.getElementById('jbu-character-edit-modal');
+      const textarea = document.getElementById('jbu-char-edit-textarea');
+      const category = modal.dataset.category;
+      const charName = modal.dataset.charName;
+      const newDescription = textarea.value.trim();
+
+      const charToUpdate = window.characterDatabase[category].find(c => c.name === charName);
+      if (charToUpdate) {
+          charToUpdate.description = newDescription;
+          console.log(`Updated ${charName} description to: ${newDescription}`);
+      }
+
+      this.closeCharacterEditModal();
+      // Re-render the replacement modal to show the change
+      this.openCharacterReplaceModal(this.characterToReplace);
   }
 
   async handleGenerateCharacterFromDb(category, name, description) {

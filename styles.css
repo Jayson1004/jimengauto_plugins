@@ -107,7 +107,7 @@
 }
 
 .jbu-btn.jbu-add-storyboard,
-.jbu-btn.jbu-batch-import, .jbu-btn.jbu-import-prompts {
+.jbu-btn.jbu-batch-import, .jbu-btn.jbu-import-prompts, .jbu-export-prompts {
   flex: 1;
 }
 .jbu-tabs {
@@ -751,14 +751,26 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  line-height: 1.4; /* Adjust line height for better readability */
 }
 
 .jbu-replace-char-item:hover {
-  background: #00d4ff;
-  color: #000;
+  background: #d7e9ed;
+  color: #d60e0e;
 }
 
 .jbu-generate-char-from-db {
   margin-left: 10px;
   flex-shrink: 0;
 }
+
+.jbu-item-btn-wrapper {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.jbu-edit-char-desc, .jbu-save-char-desc {
+  margin-left: 5px;
+}
+
