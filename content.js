@@ -423,7 +423,7 @@ class JimengBatchUploader {
     try {
       // 1. 上传参考图 (if any)
       console.log('步骤1: 上传参考图...');
-      const imagesToUpload = video.image ? [video.image] : [];
+      const imagesToUpload = video.images;
 
       if (imagesToUpload.length > 0) {
         try {
@@ -582,7 +582,7 @@ class JimengBatchUploader {
     const video = {
       id: Date.now() + this.videos.length,
       name: `视频${this.videos.length + 1}`,
-      image: null,
+      images: [],
       prompt: promptText,
       status: 'pending' // pending, uploading, completed, failed
     };
@@ -604,12 +604,14 @@ class JimengBatchUploader {
       videoDiv.draggable = true; // 允许拖拽
       videoDiv.dataset.index = index;
 
-      const imagePreview = video.image
-        ? `<div class="jbu-image-preview">
-                      <img src="${URL.createObjectURL(video.image)}" alt="预览">
-                      <button class="jbu-remove-image" data-id="${video.id}">×</button>
-                    </div>`
-        : `<div class="jbu-image-preview jbu-image-placeholder"></div>`;
+      const imagePreviews = video.images.map((img, imgIndex) => `
+        <div class="jbu-image-preview">
+          <img src="${URL.createObjectURL(img)}" alt="预览">
+          <button class="jbu-remove-video-image" data-video-id="${video.id}" data-image-index="${imgIndex}">×</button>
+        </div>
+      `).join('');
+
+      const addImageButton = video.images.length < 4 ? `<button class="jbu-add-video-image" data-id="${video.id}">+</button>` : '';
 
       videoDiv.innerHTML = `
                   <div class="jbu-storyboard-header">
@@ -619,8 +621,8 @@ class JimengBatchUploader {
                   </div>
                   <div class="jbu-storyboard-content">
                     <div class="jbu-images">
-                      ${imagePreview}
-                      ${!video.image ? `<button class="jbu-add-image" data-id="${video.id}">+</button>` : ''}
+                      ${imagePreviews}
+                      ${addImageButton}
                     </div>
                     <textarea class="jbu-prompt" placeholder="输入视频提示词..." data-id="${video.id}">${video.prompt}</textarea>
                   </div>
@@ -634,7 +636,7 @@ class JimengBatchUploader {
 
   bindVideoEvents() {
     // 添加图片按钮
-    document.querySelectorAll('#jbu-video-list .jbu-add-image').forEach(btn => {
+    document.querySelectorAll('.jbu-add-video-image').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const id = parseInt(e.target.dataset.id);
         this.addImageToVideo(id);
@@ -642,10 +644,11 @@ class JimengBatchUploader {
     });
 
     // 删除图片按钮
-    document.querySelectorAll('#jbu-video-list .jbu-remove-image').forEach(btn => {
+    document.querySelectorAll('.jbu-remove-video-image').forEach(btn => {
       btn.addEventListener('click', (e) => {
-        const id = parseInt(e.target.dataset.id);
-        this.removeImageFromVideo(id);
+        const videoId = parseInt(e.currentTarget.dataset.videoId);
+        const imageIndex = parseInt(e.currentTarget.dataset.imageIndex);
+        this.removeImageFromVideo(videoId, imageIndex);
       });
     });
 
@@ -711,11 +714,59 @@ class JimengBatchUploader {
   }
 
   handleVideoBatchImport(files) {
-    Array.from(files).forEach((file, index) => {
-      if (index < this.videos.length) {
-        this.videos[index].image = file;
+    const fileList = Array.from(files);
+    
+    const videoMap = new Map();
+    const unmappedFiles = [];
+
+    // First pass: group files that match the "1-..." pattern
+    fileList.forEach(file => {
+      const match = file.name.match(/^(\d+)[-.]/); // Matches "1-..." or "1."
+      if (match) {
+        const videoIndex = parseInt(match[1], 10) - 1; // "1-..." -> video at index 0
+        if (videoIndex >= 0) {
+          if (!videoMap.has(videoIndex)) {
+            videoMap.set(videoIndex, []);
+          }
+          videoMap.get(videoIndex).push(file);
+        } else {
+          unmappedFiles.push(file);
+        }
+      } else {
+        unmappedFiles.push(file);
       }
     });
+
+    // Assign mapped files
+    videoMap.forEach((imageList, videoIndex) => {
+      if (this.videos[videoIndex]) {
+        // Sort images to respect names like "1-1", "1-2"
+        imageList.sort((a, b) => a.name.localeCompare(b.name, undefined, {numeric: true}));
+        
+        const existingCount = this.videos[videoIndex].images.length;
+        const slotsAvailable = 4 - existingCount;
+        if (slotsAvailable > 0) {
+            this.videos[videoIndex].images.push(...imageList.slice(0, slotsAvailable));
+        }
+      }
+    });
+
+    // Assign unmapped files sequentially to video prompts that are still empty
+    let unmappedFileIndex = 0;
+    this.videos.forEach(video => {
+      if (unmappedFileIndex >= unmappedFiles.length) {
+        return; // No more files to assign
+      }
+      // If the video has no images yet (was not populated by the map)
+      if (video.images.length === 0) {
+        const slotsAvailable = 4 - video.images.length;
+        if (slotsAvailable > 0) {
+          video.images.push(unmappedFiles[unmappedFileIndex]);
+          unmappedFileIndex++;
+        }
+      }
+    });
+
     this.renderVideos();
   }
 
@@ -723,13 +774,16 @@ class JimengBatchUploader {
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
     fileInput.accept = 'image/*';
+    fileInput.multiple = true;
     fileInput.style.display = 'none';
 
     fileInput.addEventListener('change', (e) => {
-      const file = e.target.files[0];
+      const files = Array.from(e.target.files);
       const video = this.videos.find(v => v.id === videoId);
-      if (video && file) {
-        video.image = file;
+      if (video && files.length > 0) {
+        const remainingSlots = 4 - video.images.length;
+        const filesToAdd = files.slice(0, remainingSlots);
+        video.images.push(...filesToAdd);
         this.renderVideos();
       }
       document.body.removeChild(fileInput);
@@ -739,10 +793,10 @@ class JimengBatchUploader {
     fileInput.click();
   }
 
-  removeImageFromVideo(videoId) {
+  removeImageFromVideo(videoId, imageIndex) {
     const video = this.videos.find(v => v.id === videoId);
-    if (video) {
-      video.image = null;
+    if (video && video.images[imageIndex]) {
+      video.images.splice(imageIndex, 1);
       this.renderVideos();
     }
   }
