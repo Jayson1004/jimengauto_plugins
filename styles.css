@@ -298,7 +298,7 @@
   background: #ff6666;
 }
 
-.jbu-add-image {
+.jbu-add-image,.jbu-add-video-image {
   width: 60px;
   height: 60px;
   background: #333;
@@ -312,7 +312,7 @@
   justify-content: center;
 }
 
-.jbu-add-image:hover {
+.jbu-add-image:hover, .jbu-add-video-image:hover {
   border-color: #00d4ff;
   color: #00d4ff;
 }
