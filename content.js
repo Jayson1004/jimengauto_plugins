@@ -320,8 +320,12 @@ class JimengBatchUploader {
 
   async startVideoGeneration() {
     const modeElement = document.querySelector('div[class^="dimension-layout-"] div[class^="toolbar-settings-"] .lv-select-view .lv-select-view-value');
+    console.log('Mode element found:', modeElement);
+    if (modeElement) {
+        console.log('Mode element textContent:', `'${modeElement.textContent}'`);
+    }
 
-    if (!modeElement || !modeElement.textContent.includes('视频生成')) {
+    if (!modeElement || !modeElement.textContent.trim().includes('视频生成')) {
       alert('请先在即梦输入框底部工具栏手动选择“视频生成”模式，然后再开始。');
       return;
     }
@@ -1085,11 +1089,11 @@ class JimengBatchUploader {
     if (!oldCharName) return;
 
 
-    const escapedOldCharName = oldCharName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const escapedOldCharName = oldCharName.replace(/[-\/\\^$*+?.()|[\\\]{}]/g, '\\$&');
     
     // Regex for ANY occurrence of the old name, with or without a description.
     // It now handles both English and Chinese parentheses.
-    const descRegexPart = '(?:\\s*[\\(（][^\\)）]*[\\)）])?'; // Optional description part
+    const descRegexPart = '(?:\s*[\(（][^\)）]*[\)）])?'; // Optional description part
     const anyOldCharOccurrenceRegex = new RegExp(escapedOldCharName + descRegexPart, 'g');
 
     // 2. PERFORM REPLACEMENT
@@ -1128,7 +1132,6 @@ class JimengBatchUploader {
   }
 
   // ---- END 角色替换功能 ----
-
 
 
 
@@ -1480,19 +1483,29 @@ class JimengBatchUploader {
 
   // 开始上传
 
-  async startUpload() {
+    async startUpload() {
 
-    // 检查是否选择了“图片生成”
+      // 检查是否选择了“图片生成”
 
-    const modeElement = document.querySelector('div[class^="dimension-layout-"] div[class^="toolbar-settings-"] .lv-select-view .lv-select-view-value');
-console.log(modeElement)
-    if (!modeElement || !modeElement.textContent.includes('图片生成')) {
+      const modeElement = document.querySelector('div[class^="dimension-layout-"] div[class^="toolbar-settings-"] .lv-select-view .lv-select-view-value');
 
-      alert('请先在即梦输入框底部工具栏手动选择“图片生成”模式，然后再开始上传。');
+      console.log('Mode element found:', modeElement);
 
-      return;
+      if (modeElement) {
 
-    }
+          console.log('Mode element textContent:', `'${modeElement.textContent}'`);
+
+      }
+
+  
+
+      if (!modeElement || !modeElement.textContent.trim().includes('图片生成')) {
+
+        alert('请先在即梦输入框底部工具栏手动选择“图片生成”模式，然后再开始上传。');
+
+        return;
+
+      }
 
     // const aspectElement = document.querySelector('div[class^="dimension-layout-"] div[class^="toolbar-settings-"] button.lv-btn span[class^=.button-text-"]');
     // if (!aspectElement || !aspectElement.textContent.includes('9:16')) {
@@ -1760,9 +1773,15 @@ console.log(modeElement)
 
       } catch (error) {
 
+
+
         console.error('✗ 提示词填写失败:', error.message);
 
+
+
         throw new Error(`提示词填写失败: ${error.message}`);
+
+
 
       }
 
@@ -1821,7 +1840,9 @@ console.log(modeElement)
         '.remove-button-CGHPzk', // 用户提供的删除按钮类名
 
         'div[class*="remove-button-CGHPzk"]', // 模糊匹配
+
         '.remove-button-container-x2kHww .remove-button-CGHPzk', // 完整路径
+
 
 
         'div[class*="remove-button"] svg', // 包含svg的删除按钮
@@ -1875,13 +1896,22 @@ console.log(modeElement)
       const promptSelectors = [
 
         'textarea.lv-textarea', // 用户提供的textarea选择器
+
         'input.lv-input', // 用户提供的input选择器
+
+
 
         'input[placeholder*="请描述你想生成的图片"]',
 
+
+
         'textarea[placeholder*="请描述你想生成的图片"]',
 
+
+
         'input.lv-input[translate="no"]',
+
+
 
         'textarea.lv-textarea[translate="no"]'
 
@@ -2117,20 +2147,13 @@ console.log(modeElement)
 
         console.log('开始填写提示词:', prompt);
 
-
-
     
-
-
 
         const inputSelectors = [
 
-
-
           'textarea.lv-textarea',
+
           'input.lv-input',
-
-
 
 
 
@@ -2161,31 +2184,17 @@ console.log(modeElement)
 
           '[contenteditable="true"]'
 
-
-
         ];
 
-
-
     
-
-
 
         let promptInput = null;
 
-
-
     
-
-
 
         for (const selector of inputSelectors) {
 
-
-
           try {
-
-
 
             const inputs = document.querySelectorAll(selector);
 
@@ -2193,19 +2202,11 @@ console.log(modeElement)
 
             console.log(`尝试选择器 ${selector}，找到 ${inputs.length} 个元素`);
 
-
-
     
-
-
 
             for (const input of inputs) {
 
-
-
               if (input.offsetParent !== null && !input.closest('#jimeng-batch-uploader')) {
-
-
 
                 promptInput = input;
 
@@ -2245,175 +2246,118 @@ console.log(modeElement)
 
         }
 
-
-
     
-
-
 
         if (!promptInput) {
 
-
+    
 
           throw new Error('找不到提示词输入框');
 
-
+    
 
         }
 
-
-
     
-
-
 
         console.log('找到提示词输入框:', promptInput.tagName, promptInput.className);
 
-
-
     
-
-
 
         promptInput.focus();
 
-
-
         await this.sleep(200);
 
-
-
     
-
-
 
         // Differentiated logic for different input types
 
-
-
         if (promptInput.tagName === 'TEXTAREA' || promptInput.tagName === 'INPUT') {
 
-
+    
 
           console.log('使用React兼容方法填写Input/Textarea');
 
-
-
           
-
-
 
           const element = promptInput;
 
-
-
           
-
-
 
           // Set value using prototype setter hack for React compatibility
 
-
-
           const nativeValueSetter = Object.getOwnPropertyDescriptor(element.constructor.prototype, 'value')?.set;
-
-
 
           if (nativeValueSetter) {
 
-
+    
 
             nativeValueSetter.call(element, prompt);
 
-
+    
 
           } else {
 
-
+    
 
             // Fallback for unusual cases
 
-
-
             element.value = prompt;
 
-
+    
 
           }
 
-
-
     
 
-
+    
 
           // Trigger events to notify the framework of the change
 
-
-
           element.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
-
-
 
           element.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
 
-
-
+          
     
-          console.log('输入框',element)
+            console.log('输入框',element)
 
 
         } else if (promptInput.isContentEditable) {
 
-
+    
 
           console.log('使用 contentEditable 方法填写');
 
-
+    
 
           promptInput.innerHTML = prompt;
 
-
-
           promptInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
-
-
 
         } else {
 
-
+    
 
             console.warn('未知的输入框类型，使用 value 属性作为后备方案');
 
-
+    
 
             promptInput.value = prompt;
 
-
+    
 
             promptInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
 
-
-
         }
-
-
 
     
 
-
-
         console.log('提示词填写完成');
-
-
 
         await this.sleep(500);
 
-
-
       }
-
-
 
   // 点击生成按钮
 
@@ -2424,26 +2368,37 @@ console.log(modeElement)
 
 
     // 根据用户提供的按钮特征查找发送按钮
+
     // lv-btn lv-btn-secondary lv-btn-size-default lv-btn-shape-square button-wtoV7J lv-popover-open active-NdxDQM
+
     // lv-btn lv-btn-primary lv-btn-size-default lv-btn-shape-circle lv-btn-icon-only lv-btn-disabled button-wtoV7J submit-button-VW0U_J submit-button-M82Oxj
+
     const buttonSelectors = [
 
 
       'button[class*="submit-button"]', // 包含submit-button的按钮
 
+
       // 'button.lv-btn-primary:has(svg)', // 包含SVG的主要按钮
+
 
       'button:has(path[d*="M12.002 3c.424 0"])', // 根据SVG路径特征匹配
 
+
       // 备用选择器
+
 
       'button[type="submit"]',
 
+
       'button[class*="send"]',
+
 
       'button[class*="submit"]',
 
+
       'button[class*="generate"]',
+
 
       // 'button:has(svg)',
 
@@ -2683,11 +2638,7 @@ console.log(modeElement)
 
         if (!startBtn || !pauseBtn || !stopBtn) return;
 
-
-
   
-
-
 
         startBtn.disabled = this.isRunning;
 
@@ -2703,11 +2654,7 @@ console.log(modeElement)
 
         pauseBtn.textContent = this.isPaused ? '继续' : '暂停';
 
-
-
   
-
-
 
       } else if (this.activeTab === 'video') {
 
@@ -2727,11 +2674,7 @@ console.log(modeElement)
 
         if (!startBtn || !pauseBtn || !stopBtn) return;
 
-
-
   
-
-
 
         startBtn.disabled = this.isRunning;
 
@@ -2962,7 +2905,6 @@ console.log(modeElement)
 
 
 
-
     let isDragging = false;
 
 
@@ -2986,7 +2928,6 @@ console.log(modeElement)
 
 
 
-
     const startDrag = (e) => {
 
 
@@ -2996,7 +2937,6 @@ console.log(modeElement)
 
 
       if (e.target.tagName === 'BUTTON' || e.target.classList.contains('jbu-resize-handle')) return;
-
 
 
 
@@ -3018,7 +2958,6 @@ console.log(modeElement)
 
 
 
-
       // 检查是否在头部区域或者左侧拖拽区域
 
 
@@ -3028,7 +2967,6 @@ console.log(modeElement)
 
 
       const isClickOnLeftEdge = (clickX >= rect.left && clickX <= rect.left + DRAG_HANDLE_WIDTH && clickY >= rect.top && clickY <= rect.bottom);
-
 
 
 
@@ -3054,7 +2992,6 @@ console.log(modeElement)
 
 
 
-
         // 记录初始位置，用于计算拖拽偏移
 
 
@@ -3070,7 +3007,6 @@ console.log(modeElement)
 
 
 
-
         element.style.cursor = 'grabbing';
 
 
@@ -3080,7 +3016,6 @@ console.log(modeElement)
 
 
     };
-
 
 
 
@@ -3110,13 +3045,11 @@ console.log(modeElement)
 
 
 
-
         element.style.left = (element.offsetLeft + dx) + 'px';
 
 
 
         element.style.top = (element.offsetTop + dy) + 'px';
-
 
 
 
@@ -3142,7 +3075,6 @@ console.log(modeElement)
 
 
 
-
     const stopDrag = () => {
 
 
@@ -3162,7 +3094,6 @@ console.log(modeElement)
 
 
 
-
     element.addEventListener('mousedown', startDrag);
 
 
@@ -3176,7 +3107,6 @@ console.log(modeElement)
 
 
   }
-
 
 
 
@@ -3234,7 +3164,6 @@ console.log(modeElement)
 
 
 
-
     handles.forEach(handle => {
 
 
@@ -3274,9 +3203,7 @@ console.log(modeElement)
 
 
 
-
         const resize = (e) => {
-
 
 
 
@@ -3290,9 +3217,7 @@ console.log(modeElement)
 
 
 
-
             const width = originalWidth + (e.pageX - startX);
-
 
 
 
@@ -3306,9 +3231,7 @@ console.log(modeElement)
 
 
 
-
             if (width > minWidth) {
-
 
 
 
@@ -3322,9 +3245,7 @@ console.log(modeElement)
 
 
 
-
             }
-
 
 
 
@@ -3338,7 +3259,6 @@ console.log(modeElement)
 
 
 
-
               element.style.height = height + 'px';
 
 
@@ -3346,9 +3266,7 @@ console.log(modeElement)
 
 
 
-
             }
-
 
 
 
@@ -3362,9 +3280,7 @@ console.log(modeElement)
 
 
 
-
             const width = originalWidth + (e.pageX - startX);
-
 
 
 
@@ -3378,7 +3294,6 @@ console.log(modeElement)
 
 
 
-
               element.style.width = width + 'px';
 
 
@@ -3386,9 +3301,7 @@ console.log(modeElement)
 
 
 
-
             }
-
 
 
 
@@ -3402,9 +3315,7 @@ console.log(modeElement)
 
 
 
-
             const height = originalHeight + (e.pageY - startY);
-
 
 
 
@@ -3418,7 +3329,6 @@ console.log(modeElement)
 
 
 
-
               element.style.height = height + 'px';
 
 
@@ -3426,9 +3336,7 @@ console.log(modeElement)
 
 
 
-
             }
-
 
 
 
@@ -3442,9 +3350,7 @@ console.log(modeElement)
 
 
 
-
             const width = originalWidth - (e.pageX - startX);
-
 
 
 
@@ -3458,9 +3364,7 @@ console.log(modeElement)
 
 
 
-
             if (width > minWidth) {
-
 
 
 
@@ -3474,7 +3378,6 @@ console.log(modeElement)
 
 
 
-
               element.style.left = left + 'px';
 
 
@@ -3482,9 +3385,7 @@ console.log(modeElement)
 
 
 
-
             }
-
 
 
 
@@ -3498,7 +3399,6 @@ console.log(modeElement)
 
 
 
-
             const width = originalWidth - (e.pageX - startX);
 
 
@@ -3506,9 +3406,7 @@ console.log(modeElement)
 
 
 
-
             const left = originalX + (e.pageX - startX);
-
 
 
 
@@ -3522,9 +3420,7 @@ console.log(modeElement)
 
 
 
-
             const top = originalY + (e.pageY - startY);
-
 
 
 
@@ -3538,9 +3434,7 @@ console.log(modeElement)
 
 
 
-
               element.style.width = width + 'px';
-
 
 
 
@@ -3554,9 +3448,7 @@ console.log(modeElement)
 
 
 
-
             }
-
 
 
 
@@ -3570,9 +3462,7 @@ console.log(modeElement)
 
 
 
-
               element.style.height = height + 'px';
-
 
 
 
@@ -3586,9 +3476,7 @@ console.log(modeElement)
 
 
 
-
             }
-
 
 
 
@@ -3602,9 +3490,7 @@ console.log(modeElement)
 
 
 
-
             const width = originalWidth - (e.pageX - startX);
-
 
 
 
@@ -3618,9 +3504,7 @@ console.log(modeElement)
 
 
 
-
             const height = originalHeight + (e.pageY - startY);
-
 
 
 
@@ -3634,9 +3518,7 @@ console.log(modeElement)
 
 
 
-
               element.style.width = width + 'px';
-
 
 
 
@@ -3650,9 +3532,7 @@ console.log(modeElement)
 
 
 
-
             }
-
 
 
 
@@ -3666,9 +3546,7 @@ console.log(modeElement)
 
 
 
-
               element.style.height = height + 'px';
-
 
 
 
@@ -3682,7 +3560,6 @@ console.log(modeElement)
 
 
 
-
           }
 
 
@@ -3690,9 +3567,7 @@ console.log(modeElement)
 
 
 
-
         };
-
 
 
 
@@ -3712,7 +3587,6 @@ console.log(modeElement)
 
 
         };
-
 
 
 
@@ -3742,98 +3616,462 @@ console.log(modeElement)
 
 
 
-
-  // 工具函数：延时
-
-
-
-  sleep(ms) {
+    async simulateGenerationSwitch(type) {
 
 
 
-    return new Promise(resolve => setTimeout(resolve, ms));
 
 
 
-  }
+      console.log(`Attempting to switch to ${type} generation...`);
+
+
+
+
+
+
+  
+
+
+
+
+
+
+      // 1. Activate the correct tab in the floating window (if it's not already active)
+
+
+
+
+
+
+      if (this.activeTab !== type) {
+
+
+
+
+
+
+        this.activeTab = type;
+
+
+
+
+
+
+        this.renderTabs(); // This will visually switch the tab in the floating window
+
+
+
+
+
+
+        await this.sleep(300); // Give some time for the UI to update
+
+
+
+
+
+
+      }
+
+
+
+
+
+
+  
+
+
+
+
+
+
+      // 2. Click the main select view button on the webpage
+
+
+
+
+
+
+      const selectViewButton = document.querySelector('div[class^="dimension-layout-"] div[class^="toolbar-settings-"] .lv-select-view');
+
+
+
+
+
+
+      if (selectViewButton) {
+
+
+
+
+
+
+        console.log('Clicking select view button:', selectViewButton);
+
+
+
+
+
+
+        selectViewButton.click();
+
+
+
+
+
+
+        await this.sleep(500); // Wait for the dropdown to appear
+
+
+
+
+
+
+      } else {
+
+
+
+
+
+
+        console.warn('Could not find the main select view button.');
+
+
+
+
+
+
+        return;
+
+
+
+
+
+
+      }
+
+
+
+
+
+
+  
+
+
+
+
+
+
+      // 3. Find and click the correct option in the dropdown
+
+
+
+
+
+
+      const optionText = type === 'image' ? '图片生成' : '视频生成';
+
+
+
+
+
+
+      const selectOption = document.querySelector(`.lv-select-popup .lv-select-option[title="${optionText}"]`);
+
+
+
+
+
+
+      
+
+
+
+
+
+
+      if (selectOption) {
+
+
+
+
+
+
+        console.log('Clicking select option:', selectOption);
+
+
+
+
+
+
+        selectOption.click();
+
+
+
+
+
+
+        await this.sleep(300); // Wait for the selection to register
+
+
+
+
+
+
+        console.log(`Successfully switched to ${type} generation.`);
+
+
+
+
+
+
+      } else {
+
+
+
+
+
+
+        console.warn(`Could not find the select option for "${optionText}".`);
+
+
+
+
+
+
+      }
+
+
+
+
+
+
+    }
+
+
+
+
+
+
+  
+
+
+
+
+
+
+    // 工具函数：延时
+
+
+
+
+
+
+    sleep(ms) {
+
+
+
+
+
+
+      return new Promise(resolve => setTimeout(resolve, ms));
+
+
+
+
+
+
+    }
 
 }
+
+
 
 
 
 // 初始化插件
 
+
+
+
+
 console.log('即梦批量上传插件脚本已加载');
+
+
 
 console.log('当前页面:', window.location.hostname);
 
 
 
+
+
 // 防止重复初始化
+
+
 
 if (window.jimengBatchUploaderInstance) {
 
+
+
   console.log('插件实例已存在，清理旧实例');
+
+
 
   if (window.jimengBatchUploaderInstance.floatingWindow) {
 
+
+
     window.jimengBatchUploaderInstance.floatingWindow.remove();
+
+
 
   }
 
+
+
   window.jimengBatchUploaderInstance = null;
 
+
+
 }
+
+
 
 
 
 if (window.location.hostname.includes('jimeng.ai') ||
 
+
+
   window.location.hostname.includes('jianyingai.com') ||
 
+
+
   window.location.hostname.includes('jianying.com')) {
+
+
 
   console.log('检测到即梦页面，正在初始化插件...');
 
 
 
+
+
   // 清理可能存在的旧插件DOM
+
+
 
   const existingPlugin = document.getElementById('jimeng-batch-uploader');
 
+
+
   if (existingPlugin) {
+
+
 
     console.log('发现旧插件DOM，正在清理...');
 
+
+
     existingPlugin.remove();
 
+
+
   }
+
+
 
 
 
   // 等待页面完全加载
 
+
+
   if (document.readyState === 'loading') {
+
+
 
     document.addEventListener('DOMContentLoaded', () => {
 
+
+
       console.log('DOM加载完成，创建插件实例');
+
+
 
       window.jimengBatchUploaderInstance = new JimengBatchUploader();
 
+
+
     });
+
+
 
   } else {
 
+
+
     console.log('页面已加载，直接创建插件实例');
+
+
 
     window.jimengBatchUploaderInstance = new JimengBatchUploader();
 
+
+
   }
+
+
 
 } else {
 
+
+
   console.log('非即梦页面，插件不会启动');
+
+
 
 }
 
+
+
+chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
+
+  if (request.action === 'imageGen') {
+
+    console.log('Content script received request to simulate image generation switch.');
+
+    if (window.jimengBatchUploaderInstance) {
+
+      await window.jimengBatchUploaderInstance.simulateGenerationSwitch('image');
+
+      sendResponse({ status: 'success', message: 'Image generation switch simulated.' });
+
+    } else {
+
+      sendResponse({ status: 'error', message: 'JimengBatchUploader instance not found.' });
+
+    }
+
+  } else if (request.action === 'videoGen') {
+
+    console.log('Content script received request to simulate video generation switch.');
+
+    if (window.jimengBatchUploaderInstance) {
+
+      await window.jimengBatchUploaderInstance.simulateGenerationSwitch('video');
+
+      sendResponse({ status: 'success', message: 'Video generation switch simulated.' });
+
+    } else {
+
+      sendResponse({ status: 'error', message: 'JimengBatchUploader instance not found.' });
+
+    }
+
+  }
+
+  return true; // Indicates an asynchronous response
+
+});

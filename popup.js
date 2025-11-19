@@ -7,6 +7,8 @@ document.addEventListener('DOMContentLoaded', function() {
   const refreshPageBtn = document.getElementById('refresh-page');
   const helpBtn = document.getElementById('help');
   const feedbackLink = document.getElementById('feedback');
+  const imageGenTriggerBtn = document.getElementById('image-gen-trigger');
+  const videoGenTriggerBtn = document.getElementById('video-gen-trigger');
 
   // 检查当前页面状态
   checkPageStatus();
@@ -16,6 +18,35 @@ document.addEventListener('DOMContentLoaded', function() {
   refreshPageBtn.addEventListener('click', refreshCurrentPage);
   helpBtn.addEventListener('click', showHelp);
   feedbackLink.addEventListener('click', showFeedback);
+  
+  imageGenTriggerBtn.addEventListener('click', () => sendActionToContentScript('imageGen'));
+  videoGenTriggerBtn.addEventListener('click', () => sendActionToContentScript('videoGen'));
+
+  // Function to send action to content script
+  function sendActionToContentScript(actionType) {
+    chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
+      if (tabs[0]) {
+        chrome.tabs.sendMessage(tabs[0].id, { action: actionType }, function(response) {
+          if (chrome.runtime.lastError) {
+            console.error("Error sending message to content script:", chrome.runtime.lastError);
+            // If content script hasn't loaded, inject it
+            chrome.scripting.executeScript({
+              target: { tabId: tabs[0].id },
+              files: ['content.js']
+            }, () => {
+              chrome.scripting.insertCSS({
+                target: { tabId: tabs[0].id },
+                files: ['styles.css']
+              });
+              // Try sending the message again after injection
+              chrome.tabs.sendMessage(tabs[0].id, { action: actionType });
+            });
+          }
+        });
+      }
+      window.close(); // Close popup after triggering action
+    });
+  }
 
   // 检查页面状态
   function checkPageStatus() {
