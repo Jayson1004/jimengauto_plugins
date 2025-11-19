@@ -7,8 +7,8 @@ document.addEventListener('DOMContentLoaded', function() {
   const refreshPageBtn = document.getElementById('refresh-page');
   const helpBtn = document.getElementById('help');
   const feedbackLink = document.getElementById('feedback');
-  const imageGenTriggerBtn = document.getElementById('image-gen-trigger');
-  const videoGenTriggerBtn = document.getElementById('video-gen-trigger');
+  // const imageGenTriggerBtn = document.getElementById('image-gen-trigger');
+  // const videoGenTriggerBtn = document.getElementById('video-gen-trigger');
 
   // 检查当前页面状态
   checkPageStatus();
@@ -19,8 +19,8 @@ document.addEventListener('DOMContentLoaded', function() {
   helpBtn.addEventListener('click', showHelp);
   feedbackLink.addEventListener('click', showFeedback);
   
-  imageGenTriggerBtn.addEventListener('click', () => sendActionToContentScript('imageGen'));
-  videoGenTriggerBtn.addEventListener('click', () => sendActionToContentScript('videoGen'));
+  // imageGenTriggerBtn.addEventListener('click', () => sendActionToContentScript('imageGen'));
+  // videoGenTriggerBtn.addEventListener('click', () => sendActionToContentScript('videoGen'));
 
   // Function to send action to content script
   function sendActionToContentScript(actionType) {
