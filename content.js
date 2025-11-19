@@ -316,17 +316,30 @@ class JimengBatchUploader {
 
   // ... (existing image generation functions)
 
+  async getCurrentGenerationMode() {
+    const promptInputs = document.querySelectorAll('textarea[class*="prompt-textarea-"], input[class*="prompt-input-"]');
+    
+    for (const input of promptInputs) {
+      if (input.placeholder && input.placeholder.includes('想生成的图片')) {
+        console.log("Detected Image Generation Mode based on placeholder:", input.placeholder);
+        return 'image';
+      }
+      if (input.placeholder && input.placeholder.includes('画面内容、运动方式')) {
+        console.log("Detected Video Generation Mode based on placeholder:", input.placeholder);
+        return 'video';
+      }
+    }
+
+    console.log("Could not determine generation mode from prompt placeholders.");
+    return 'unknown';
+  }
+
   // ---- Video Generation Functions ----
 
   async startVideoGeneration() {
-    const modeElement = document.querySelector('div[class^="dimension-layout-"] div[class^="toolbar-settings-"] .lv-select-view .lv-select-view-value');
-    console.log('Mode element found:', modeElement);
-    if (modeElement) {
-        console.log('Mode element textContent:', `'${modeElement.textContent}'`);
-    }
-
-    if (!modeElement || !modeElement.textContent.trim().includes('视频生成')) {
-      alert('请先在即梦输入框底部工具栏手动选择“视频生成”模式，然后再开始。');
+    const currentMode = await this.getCurrentGenerationMode();
+    if (currentMode !== 'video') {
+      alert('请切换到“视频生成”模式，然后再开始。');
       return;
     }
 
@@ -1481,31 +1494,35 @@ class JimengBatchUploader {
 
 
 
-  // 开始上传
+    // 开始上传
 
-    async startUpload() {
 
-      // 检查是否选择了“图片生成”
-
-      const modeElement = document.querySelector('div[class^="dimension-layout-"] div[class^="toolbar-settings-"] .lv-select-view .lv-select-view-value');
-
-      console.log('Mode element found:', modeElement);
-
-      if (modeElement) {
-
-          console.log('Mode element textContent:', `'${modeElement.textContent}'`);
-
-      }
 
   
 
-      if (!modeElement || !modeElement.textContent.trim().includes('图片生成')) {
 
-        alert('请先在即梦输入框底部工具栏手动选择“图片生成”模式，然后再开始上传。');
 
-        return;
+      async startUpload() {
 
-      }
+
+
+        const currentMode = await this.getCurrentGenerationMode();
+
+
+
+        if (currentMode !== 'image') {
+
+
+
+          alert('请切换到“图片生成”模式，然后再开始上传。');
+
+
+
+          return;
+
+
+
+        }
 
     // const aspectElement = document.querySelector('div[class^="dimension-layout-"] div[class^="toolbar-settings-"] button.lv-btn span[class^=.button-text-"]');
     // if (!aspectElement || !aspectElement.textContent.includes('9:16')) {
