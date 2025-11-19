@@ -719,11 +719,13 @@ class JimengBatchUploader {
     const videoMap = new Map();
     const unmappedFiles = [];
 
-    // First pass: group files that match the "1-..." pattern
+    // First pass: group files that match the "p1-1" or "1-1" pattern
     fileList.forEach(file => {
-      const match = file.name.match(/^(\d+)[-.]/); // Matches "1-..." or "1."
+      // Updated regex to handle optional letter prefix and capture both numbers
+      const match = file.name.match(/^([a-zA-Z]?)(\d+)[-.](\d+)/); 
       if (match) {
-        const videoIndex = parseInt(match[1], 10) - 1; // "1-..." -> video at index 0
+        // videoIndex is the second capturing group (e.g., '1' from 'p1-1' or '1-1')
+        const videoIndex = parseInt(match[2], 10) - 1; 
         if (videoIndex >= 0) {
           if (!videoMap.has(videoIndex)) {
             videoMap.set(videoIndex, []);
