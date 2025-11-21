@@ -30,6 +30,76 @@ class JimengBatchUploader {
     const floatingDiv = document.createElement('div');
     floatingDiv.id = 'jimeng-batch-uploader';
     floatingDiv.innerHTML = `
+      <style>
+        /* Custom checkbox styles */
+        .jbu-list-header {
+          padding: 5px 10px;
+          display: flex;
+          align-items: center;
+          font-size: 12px;
+          border-top: 1px solid #444;
+          border-bottom: 1px solid #444;
+          background-color: #2a2a2a;
+        }
+
+        .jbu-list-header label {
+          margin-left: 8px;
+          cursor: pointer;
+          color: #ccc;
+        }
+
+        .jbu-storyboard-header input[type="checkbox"],
+        .jbu-list-header input[type="checkbox"] {
+          appearance: none;
+          -webkit-appearance: none;
+          background-color: #333;
+          border: 1px solid #555;
+          width: 16px;
+          height: 16px;
+          border-radius: 3px;
+          cursor: pointer;
+          position: relative;
+          outline: none;
+          transition: background-color 0.2s;
+          flex-shrink: 0;
+        }
+
+        .jbu-storyboard-header input[type="checkbox"]:checked,
+        .jbu-list-header input[type="checkbox"]:checked {
+          background-color: #007bff;
+          border-color: #007bff;
+        }
+
+        .jbu-storyboard-header input[type="checkbox"]:checked::after,
+        .jbu-list-header input[type="checkbox"]:checked::after {
+          content: '';
+          position: absolute;
+          top: 2px;
+          left: 5px;
+          width: 4px;
+          height: 8px;
+          border: solid white;
+          border-width: 0 2px 2px 0;
+          transform: rotate(45deg);
+        }
+        
+        .jbu-storyboard-header {
+            display: flex;
+            align-items: center;
+        }
+
+        .jbu-storyboard-header .jbu-storyboard-checkbox {
+            margin-right: 8px;
+        }
+
+        .jbu-storyboard-header .jbu-storyboard-name {
+          flex-grow: 1;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          padding: 0 5px;
+        }
+      </style>
       <div class="jbu-floating-ball" style="display: none;">
         <div class="jbu-ball-icon">批</div>
       </div>
@@ -115,6 +185,10 @@ class JimengBatchUploader {
             <div id="jbu-character-list" class="jbu-character-list"></div>
           </div>
 
+          <div class="jbu-list-header">
+            <input type="checkbox" id="jbu-select-all-storyboards" checked>
+            <label for="jbu-select-all-storyboards">全选/全不选</label>
+          </div>
           <div class="jbu-storyboard-list" id="jbu-storyboard-list"></div>
 
           <div class="jbu-progress">
@@ -137,6 +211,10 @@ class JimengBatchUploader {
           <div class="jbu-controls">
              <button class="jbu-btn jbu-video-batch-import-images">批量导入参考图</button>
              <input type="file" id="jbu-video-file-input" multiple accept="image/*" style="display: none;">
+          </div>
+           <div class="jbu-list-header">
+            <input type="checkbox" id="jbu-select-all-videos" checked>
+            <label for="jbu-select-all-videos">全选/全不选</label>
           </div>
            <div class="jbu-video-list" id="jbu-video-list">
             <!-- 视频列表将在这里渲染 -->
@@ -221,6 +299,24 @@ class JimengBatchUploader {
     }
   }
 
+  updateSelectAllCheckboxes() {
+    if (this.storyboards.length > 0) {
+        const allStoryboardsSelected = this.storyboards.every(s => s.selected);
+        const selectAllStoryboardsCheckbox = document.getElementById('jbu-select-all-storyboards');
+        if (selectAllStoryboardsCheckbox) {
+            selectAllStoryboardsCheckbox.checked = allStoryboardsSelected;
+        }
+    }
+
+    if (this.videos.length > 0) {
+        const allVideosSelected = this.videos.every(v => v.selected);
+        const selectAllVideosCheckbox = document.getElementById('jbu-select-all-videos');
+        if (selectAllVideosCheckbox) {
+            selectAllVideosCheckbox.checked = allVideosSelected;
+        }
+    }
+  }
+
   // 绑定事件
   bindEvents() {
     const container = this.floatingWindow;
@@ -299,6 +395,19 @@ class JimengBatchUploader {
       this.stopUpload();
     });
 
+    // --- "Select All" checkbox events ---
+    container.querySelector('#jbu-select-all-storyboards').addEventListener('change', (e) => {
+      const isChecked = e.target.checked;
+      this.storyboards.forEach(s => s.selected = isChecked);
+      this.renderStoryboards();
+    });
+
+    container.querySelector('#jbu-select-all-videos').addEventListener('change', (e) => {
+      const isChecked = e.target.checked;
+      this.videos.forEach(v => v.selected = isChecked);
+      this.renderVideos();
+    });
+
     // --- Modal Events ---
     const modal = document.getElementById('jbu-character-replace-modal');
     modal.querySelector('.jbu-modal-close').addEventListener('click', () => {
@@ -371,8 +480,9 @@ class JimengBatchUploader {
       return;
     }
 
-    // 跳过已完成的视频
-    while (this.currentIndex < this.videos.length && this.videos[this.currentIndex].status === 'completed') {
+    // 跳过已完成或未选中的视频
+    while (this.currentIndex < this.videos.length && 
+          (this.videos[this.currentIndex].status === 'completed' || !this.videos[this.currentIndex].selected)) {
       this.currentIndex++;
     }
 
@@ -481,9 +591,11 @@ class JimengBatchUploader {
 
       prompt: promptText,
 
-      status: 'pending' // pending, uploading, completed, failed
+            status: 'pending', // pending, uploading, completed, failed
 
-    };
+            selected: true
+
+          };
 
 
 
@@ -584,7 +696,8 @@ class JimengBatchUploader {
       name: `视频${this.videos.length + 1}`,
       images: [],
       prompt: promptText,
-      status: 'pending' // pending, uploading, completed, failed
+      status: 'pending', // pending, uploading, completed, failed
+      selected: true
     };
 
     this.videos.push(video);
@@ -615,6 +728,7 @@ class JimengBatchUploader {
 
       videoDiv.innerHTML = `
                   <div class="jbu-storyboard-header">
+                    <input type="checkbox" class="jbu-video-checkbox" data-id="${video.id}" ${video.selected ? 'checked' : ''}>
                     <span class="jbu-storyboard-name">${video.name}</span>
                     <span class="jbu-storyboard-status">${this.getStatusText(video.status)}</span>
                     <button class="jbu-delete-video" data-id="${video.id}">×</button>
@@ -632,6 +746,7 @@ class JimengBatchUploader {
 
     this.bindVideoEvents();
     this.setupVideoDragAndDrop(); // 添加视频拖拽
+    this.updateSelectAllCheckboxes();
   }
 
   bindVideoEvents() {
@@ -670,6 +785,18 @@ class JimengBatchUploader {
         this.videos = this.videos.filter(v => v.id !== id);
         this.reorderVideos(); // 重新排序视频名称
         this.renderVideos();
+      });
+    });
+
+    // 绑定视频勾选事件
+    document.querySelectorAll('.jbu-video-checkbox').forEach(checkbox => {
+      checkbox.addEventListener('change', (e) => {
+        const id = parseInt(e.target.dataset.id);
+        const video = this.videos.find(v => v.id === id);
+        if (video) {
+          video.selected = e.target.checked;
+          this.updateSelectAllCheckboxes();
+        }
       });
     });
   }
@@ -1222,9 +1349,11 @@ class JimengBatchUploader {
 
         prompt: '',
 
-        status: 'pending'
+                status: 'pending',
 
-      };
+                selected: true
+
+              };
 
       this.storyboards.push(storyboard);
 
@@ -1340,6 +1469,7 @@ class JimengBatchUploader {
 
           <div class="jbu-storyboard-header">
 
+            <input type="checkbox" class="jbu-storyboard-checkbox" data-id="${storyboard.id}" ${storyboard.selected ? 'checked' : ''}>
             <span class="jbu-storyboard-name">${storyboard.name}</span>
 
             <span class="jbu-storyboard-status">${this.getStatusText(storyboard.status)}</span>
@@ -1383,6 +1513,7 @@ class JimengBatchUploader {
 
 
     this.bindStoryboardEvents();
+    this.updateSelectAllCheckboxes();
 
   }
 
@@ -1449,25 +1580,27 @@ class JimengBatchUploader {
 
 
     // 更新提示词
-
-    document.querySelectorAll('.jbu-prompt').forEach(textarea => {
-
+    document.querySelectorAll('#jbu-storyboard-list .jbu-prompt').forEach(textarea => {
       textarea.addEventListener('input', (e) => {
-
         const id = parseInt(e.target.dataset.id);
-
         const storyboard = this.storyboards.find(s => s.id === id);
-
         if (storyboard) {
-
           storyboard.prompt = e.target.value;
-
         }
-
         this.updateAndRenderCharacters(); // 实时更新角色列表
-
       });
+    });
 
+    // 绑定分镜勾选事件
+    document.querySelectorAll('.jbu-storyboard-checkbox').forEach(checkbox => {
+      checkbox.addEventListener('change', (e) => {
+        const id = parseInt(e.target.dataset.id);
+        const storyboard = this.storyboards.find(s => s.id === id);
+        if (storyboard) {
+          storyboard.selected = e.target.checked;
+          this.updateSelectAllCheckboxes();
+        }
+      });
     });
 
 
@@ -1652,13 +1785,23 @@ class JimengBatchUploader {
 
   
 
-      // 跳过已完成的分镜
+            // 跳过已完成或未选中的分镜
 
-      while (this.currentIndex < this.storyboards.length && this.storyboards[this.currentIndex].status === 'completed') {
+  
 
-        this.currentIndex++;
+            while (this.currentIndex < this.storyboards.length && 
 
-      }
+  
+
+                  (this.storyboards[this.currentIndex].status === 'completed' || !this.storyboards[this.currentIndex].selected)) {
+
+  
+
+              this.currentIndex++;
+
+  
+
+            }
 
   
 
