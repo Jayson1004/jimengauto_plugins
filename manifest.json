@@ -1,32 +1,37 @@
 {
   "manifest_version": 3,
   "name": "即梦批量上传助手",
-  "version": "1.0.0",
+  "version": "2.5.0",
   "description": "即梦分镜批量上传工具，提高创作效率",
   "permissions": [
     "activeTab",
     "storage",
-    "scripting"
+    "scripting",
+    "alarms"
   ],
-  "host_permissions": [
-    "*://*.jimeng.ai/*",
-    "*://*.jianyingai.com/*",
-    "*://jimeng.jianying.com/*"
-  ],
-  "content_scripts": [
-    {
-      "matches": [
-        "*://*.jimeng.ai/*",
-        "*://*.jianyingai.com/*",
-        "*://jimeng.jianyingai.com/*",
-        "*://jimeng.jianying.com/*"
+    "host_permissions": [
+      "*://*.jimeng.ai/*",
+      "*://*.jianyingai.com/*",
+      "*://jimeng.jianying.com/*"
+    ],
+    "content_scripts": [
+        {
+          "matches": [
+            "*://*.jimeng.ai/*",
+            "*://*.jianyingai.com/*",
+            "*://jimeng.jianyingai.com/*",
+            "*://jimeng.jianying.com/*"
+          ],
+          "js": ["characters.js", "utils.js", "content.js"],
+          "css": ["styles.css"],
+          "run_at": "document_end"
+        },
+        {
+          "matches": ["http://localhost:5173/*"],
+          "js": ["localhost_content.js"],
+          "run_at": "document_end"
+        }
       ],
-      "js": ["characters.js", "utils.js", "content.js"],
-      "css": ["styles.css"],
-      "run_at": "document_end",
-      "all_frames": false
-    }
-  ],
   "background": {
     "service_worker": "background.js"
   },

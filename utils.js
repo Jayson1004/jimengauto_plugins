@@ -65,44 +65,20 @@ function parseCSV(str) {
 function extractCharactersFromPrompt(prompt) {
   if (!prompt) return [];
 
-    // 1. Normalize prompt: replace Chinese symbols, newlines, and '*'
-    // This makes the matching logic simpler and more robust.
-    let processedPrompt = prompt
-        .replace(/<br\s*\/?>|\n/gi, ' ') // handle newlines
-        .replace(/：/g, ':')
-        .replace(/；/g, ';')
-        .replace(/（/g, '(')
-        .replace(/）/g, ')')
-        .replace(/\*/g, ' '); // treat '*' as a space separator
+  const characterNames = new Set();
+  const regex = /(?:角色：)?([\u4e00-\u9fa5a-zA-Z0-9]+?)[(（](.*?)[)）]/g;
+  let match;
 
-    // 2. Extract the block of text containing character definitions
-    const roleMatch = processedPrompt.match(/角色:\s*([^;]+)/);
-    if (!roleMatch || !roleMatch[1]) {
-        return [];
+  while ((match = regex.exec(prompt)) !== null) {
+    let name = match[1].trim(); // Capture group 1 is the character name
+    // Remove '和' and '*' from the name
+    name = name.replace(/和|\*/g, '');
+    if (name) {
+      characterNames.add(name);
     }
-    const charactersBlock = roleMatch[1];
+  }
 
-    // 3. Find all "name(description)" chunks.
-    // This regex handles names with spaces, e.g., "Mickey Mouse (a mouse)".
-    const characterChunkRegex = /[^()]+?\s*\([^)]*\)/g;
-    const chunks = charactersBlock.match(characterChunkRegex);
-
-    if (!chunks) {
-        return [];
-    }
-
-    const characterNames = new Set();
-    chunks.forEach(chunk => {
-        // 4. From each chunk, extract just the name part.
-        const parenIndex = chunk.indexOf('(');
-        const name = chunk.substring(0, parenIndex).trim();
-        if (name) {
-            characterNames.add(name);
-        }
-    });
-
-    // 5. Return a unique list of names.
-    return Array.from(characterNames);
+  return Array.from(characterNames);
 }
 
 /**

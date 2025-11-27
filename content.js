@@ -12,6 +12,7 @@ class JimengBatchUploader {
     this.activeTab = 'image'; // 'image' or 'video'
     this.floatingWindow = null;
     this.characterToReplace = null; // To store the name of the character being replaced
+    this.loadingOverlay = null; // Added for loading overlay
     this.init();
   }
 
@@ -21,6 +22,58 @@ class JimengBatchUploader {
     this.makeDraggable();
     this.makeResizable();
     this.renderTabs(); // 初始化时渲染正确的tab
+  }
+
+  // 显示加载蒙层
+  _showLoadingOverlay(message = '正在载入...') {
+    if (!this.loadingOverlay) {
+      this.loadingOverlay = document.createElement('div');
+      this.loadingOverlay.id = 'jbu-loading-overlay';
+      this.loadingOverlay.innerHTML = `<div class="jbu-loading-spinner"></div><p>${message}</p>`;
+      document.body.appendChild(this.loadingOverlay);
+    } else {
+      this.loadingOverlay.querySelector('p').textContent = message;
+    }
+    this.loadingOverlay.style.display = 'flex';
+  }
+
+  // 隐藏加载蒙层
+  _hideLoadingOverlay() {
+    if (this.loadingOverlay) {
+      this.loadingOverlay.style.display = 'none';
+    }
+  }
+
+  handleProcessUpdate(data) {
+    this._showLoadingOverlay('正在载入数据...'); // Show loading overlay
+    try {
+      // console.log('Content Script收到后台转发的更新数据:', data);
+      // if (confirm('是否清空当前列表并导入新数据?')) {
+        this.clearStoryboards();
+        this.clearVideos();
+        data = JSON.parse(data)
+        if (data && Array.isArray(data)) {
+          data.forEach(item => {
+            if (item.image_prompt) {
+              this.addStoryboard(item.image_prompt);
+            }
+            if (item.single_frame_video_prompt) {
+              this.addVideo(item.single_frame_video_prompt);
+            }
+          });
+          this.updateAndRenderCharacters();
+          this.renderVideos();
+          // alert('数据导入成功！'); // Removed alert as it blocks
+        } else {
+          alert('导入失败：数据格式不正确。');
+        }
+      // }
+    } finally {
+      this._hideLoadingOverlay(); // Hide loading overlay regardless of success or failure
+      // if (data && Array.isArray(data)) {
+      //   alert('数据导入成功！'); // Show success alert after overlay is hidden
+      // }
+    }
   }
 
   // 创建悬浮窗
@@ -98,6 +151,39 @@ class JimengBatchUploader {
           overflow: hidden;
           text-overflow: ellipsis;
           padding: 0 5px;
+        }
+
+        /* Loading Overlay Styles */
+        #jbu-loading-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background-color: rgba(0, 0, 0, 0.7);
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          color: white;
+          font-size: 1.5em;
+          z-index: 99999; /* Ensure it's on top */
+          pointer-events: all; /* Block interactions */
+        }
+
+        .jbu-loading-spinner {
+          border: 4px solid #f3f3f3; /* Light grey */
+          border-top: 4px solid #3498db; /* Blue */
+          border-radius: 50%;
+          width: 40px;
+          height: 40px;
+          animation: spin 1s linear infinite;
+          margin-bottom: 10px;
+        }
+
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
         }
       </style>
       <div class="jbu-floating-ball" style="display: none;">
@@ -320,6 +406,20 @@ class JimengBatchUploader {
   // 绑定事件
   bindEvents() {
     const container = this.floatingWindow;
+
+    // Listen for messages from the local webpage via window.postMessage
+    window.addEventListener('message', (event) => {
+        // We only accept messages from ourselves (the same window)
+        // and with a specific type to avoid conflicts.
+        if (event.source !== window || !event.data || event.data.type !== 'JIMENG_UPLOADER_DATA') {
+            return;
+        }
+
+        console.log('Content Script received message from local page:', event.data.payload);
+        
+        // Process the data. The handleProcessUpdate function already has a confirmation dialog.
+        this.handleProcessUpdate(event.data.payload);
+    });
 
     // Tab切换
     container.querySelectorAll('.jbu-tab-btn').forEach(btn => {
@@ -761,8 +861,9 @@ class JimengBatchUploader {
     // 删除图片按钮
     document.querySelectorAll('.jbu-remove-video-image').forEach(btn => {
       btn.addEventListener('click', (e) => {
-        const videoId = parseInt(e.currentTarget.dataset.videoId);
-        const imageIndex = parseInt(e.currentTarget.dataset.imageIndex);
+        e.stopPropagation(); // Stop event from bubbling up to drag-and-drop handlers
+        const videoId = parseInt(e.target.dataset.videoId);
+        const imageIndex = parseInt(e.target.dataset.imageIndex);
         this.removeImageFromVideo(videoId, imageIndex);
       });
     });
@@ -931,10 +1032,10 @@ class JimengBatchUploader {
   }
 
   clearVideos() {
-    if (confirm('确定要清空所有视频任务吗？')) {
+    // if (confirm('确定要清空所有视频任务吗？')) {
       this.videos = [];
       this.renderVideos();
-    }
+    // }
   }
 
   // ---- END 视频列表功能 ----
@@ -2814,7 +2915,7 @@ class JimengBatchUploader {
 
   clearStoryboards() {
 
-    if (confirm('确定要清空所有分镜吗？')) {
+    // if (confirm('确定要清空所有分镜吗？')) {
 
       this.storyboards = [];
 
@@ -2822,7 +2923,7 @@ class JimengBatchUploader {
 
       this.updateAndRenderCharacters(); // 清空角色列表
 
-    }
+    // }
 
   }
 
@@ -4116,7 +4217,15 @@ console.log('即梦批量上传插件脚本已加载');
 
 
 
+
+
 console.log('当前页面:', window.location.hostname);
+
+
+
+
+
+
 
 
 
@@ -4126,7 +4235,11 @@ console.log('当前页面:', window.location.hostname);
 
 
 
+
+
 if (window.jimengBatchUploaderInstance) {
+
+
 
 
 
@@ -4134,7 +4247,11 @@ if (window.jimengBatchUploaderInstance) {
 
 
 
+
+
   if (window.jimengBatchUploaderInstance.floatingWindow) {
+
+
 
 
 
@@ -4142,7 +4259,11 @@ if (window.jimengBatchUploaderInstance) {
 
 
 
+
+
   }
+
+
 
 
 
@@ -4150,85 +4271,101 @@ if (window.jimengBatchUploaderInstance) {
 
 
 
+
+
 }
 
 
 
 
 
-if (window.location.hostname.includes('jimeng.ai') ||
-
-
-
-  window.location.hostname.includes('jianyingai.com') ||
-
-
-
-  window.location.hostname.includes('jianying.com')) {
-
-
-
-  console.log('检测到即梦页面，正在初始化插件...');
 
 
 
 
 
-  // 清理可能存在的旧插件DOM
 
-
-
-  const existingPlugin = document.getElementById('jimeng-batch-uploader');
-
-
-
-  if (existingPlugin) {
-
-
-
-    console.log('发现旧插件DOM，正在清理...');
-
-
-
-    existingPlugin.remove();
-
-
-
-  }
+// Since this script only runs on the target sites (due to manifest.json), we can directly initialize.
 
 
 
 
 
-  // 等待页面完全加载
+console.log('检测到即梦页面，正在初始化插件...');
 
 
 
-  if (document.readyState === 'loading') {
 
 
 
-    document.addEventListener('DOMContentLoaded', () => {
 
 
 
-      console.log('DOM加载完成，创建插件实例');
+
+
+// 清理可能存在的旧插件DOM
 
 
 
-      window.jimengBatchUploaderInstance = new JimengBatchUploader();
+
+
+const existingPlugin = document.getElementById('jimeng-batch-uploader');
 
 
 
-    });
+
+
+if (existingPlugin) {
 
 
 
-  } else {
+
+
+  console.log('发现旧插件DOM，正在清理...');
 
 
 
-    console.log('页面已加载，直接创建插件实例');
+
+
+  existingPlugin.remove();
+
+
+
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+// 等待页面完全加载
+
+
+
+
+
+if (document.readyState === 'loading') {
+
+
+
+
+
+  document.addEventListener('DOMContentLoaded', () => {
+
+
+
+
+
+    console.log('DOM加载完成，创建插件实例');
+
+
 
 
 
@@ -4236,7 +4373,11 @@ if (window.location.hostname.includes('jimeng.ai') ||
 
 
 
-  }
+
+
+  });
+
+
 
 
 
@@ -4244,7 +4385,17 @@ if (window.location.hostname.includes('jimeng.ai') ||
 
 
 
-  console.log('非即梦页面，插件不会启动');
+
+
+  console.log('页面已加载，直接创建插件实例');
+
+
+
+
+
+  window.jimengBatchUploaderInstance = new JimengBatchUploader();
+
+
 
 
 
@@ -4252,42 +4403,174 @@ if (window.location.hostname.includes('jimeng.ai') ||
 
 
 
+
+
+
+
+
+
+
+
+// Listener for messages from the background script
+
+
+
+
+
 chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
 
-  if (request.action === 'imageGen') {
+
+
+
+
+  if (request.action === 'processUpdate') {
+
+
+
+
+
+    if (window.jimengBatchUploaderInstance) {
+
+
+
+
+
+      window.jimengBatchUploaderInstance.handleProcessUpdate(request.payload);
+
+
+
+
+
+      sendResponse({ status: 'success', message: 'Data processed by content script.' });
+
+
+
+
+
+    } else {
+
+
+
+
+
+      sendResponse({ status: 'error', message: 'JimengBatchUploader instance not found.' });
+
+
+
+
+
+    }
+
+
+
+
+
+  } else if (request.action === 'imageGen') {
+
+
+
+
 
     console.log('Content script received request to simulate image generation switch.');
 
+
+
+
+
     if (window.jimengBatchUploaderInstance) {
+
+
+
+
 
       await window.jimengBatchUploaderInstance.simulateGenerationSwitch('image');
 
+
+
+
+
       sendResponse({ status: 'success', message: 'Image generation switch simulated.' });
+
+
+
+
 
     } else {
 
+
+
+
+
       sendResponse({ status: 'error', message: 'JimengBatchUploader instance not found.' });
 
+
+
+
+
     }
+
+
+
+
 
   } else if (request.action === 'videoGen') {
 
+
+
+
+
     console.log('Content script received request to simulate video generation switch.');
+
+
+
+
 
     if (window.jimengBatchUploaderInstance) {
 
+
+
+
+
       await window.jimengBatchUploaderInstance.simulateGenerationSwitch('video');
+
+
+
+
 
       sendResponse({ status: 'success', message: 'Video generation switch simulated.' });
 
+
+
+
+
     } else {
+
+
+
+
 
       sendResponse({ status: 'error', message: 'JimengBatchUploader instance not found.' });
 
+
+
+
+
     }
+
+
+
+
 
   }
 
+
+
+
+
   return true; // Indicates an asynchronous response
+
+
+
+
 
 });

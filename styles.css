@@ -276,7 +276,7 @@
   object-fit: cover;
 }
 
-.jbu-remove-image {
+.jbu-remove-image, .jbu-remove-video-image {
   position: absolute;
   top: -5px;
   right: -5px;
@@ -294,7 +294,7 @@
   line-height: 1;
 }
 
-.jbu-remove-image:hover {
+.jbu-remove-image:hover, .jbu-remove-video-image:hover {
   background: #ff6666;
 }
 
