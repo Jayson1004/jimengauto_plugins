@@ -18,11 +18,35 @@ class JimengBatchUploader {
   }
 
   init() {
+    this._showLoadingOverlay('正在等待即梦页面加载...');
     this.createFloatingWindow();
     this.bindEvents();
     this.makeDraggable();
     this.makeResizable();
     this.renderTabs(); // 初始化时渲染正确的tab
+    this.waitForPageReady();
+  }
+
+  waitForPageReady() {
+      console.log('开始等待即梦页面就绪...');
+      const checkInterval = setInterval(() => {
+          // Check for common elements that indicate the page is usable.
+          // Use multiple selectors to be robust.
+          const promptInput = document.querySelector('textarea.lv-textarea, input.lv-input, textarea[placeholder*="请描述"]');
+          const generateBtn = document.querySelector('button[class*="submit-button"], button[class*="generate"], button[type="submit"]');
+
+          if (promptInput || generateBtn) {
+              clearInterval(checkInterval);
+              this._hideLoadingOverlay();
+              console.log('即梦页面已就绪');
+          }
+      }, 500);
+      
+      // Timeout to avoid infinite loading
+      setTimeout(() => {
+          clearInterval(checkInterval);
+          this._hideLoadingOverlay();
+      }, 30000);
   }
 
   // 显示加载蒙层
@@ -46,7 +70,6 @@ class JimengBatchUploader {
   }
 
   handleProcessUpdate(data) {
-    this._showLoadingOverlay('正在载入数据...'); // Show loading overlay
     try {
       // console.log('Content Script收到后台转发的更新数据:', data);
       // if (confirm('是否清空当前列表并导入新数据?')) {
@@ -85,9 +108,16 @@ class JimengBatchUploader {
         // Process Peoples (Characters)
         if (peoples.length > 0) {
              this.importedPeopleNames = peoples.map(p => {
-                 // Support both object with name property or simple string
-                 return (typeof p === 'object' && p.name) ? p.name : String(p);
-             }).filter(name => name); // Filter out empty names
+                 // Support both object with name property or simple string, and capture 'url' if present
+                 if (typeof p === 'object') {
+                     const charData = { name: p.name || String(p) };
+                     if (p.url) {
+                         charData.url = p.url;
+                     }
+                     return charData;
+                 }
+                 return { name: String(p) };
+             }).filter(p => p.name); // Filter out empty names
         }
 
         // Process Scenes (Storyboards/Videos)
@@ -1140,11 +1170,23 @@ class JimengBatchUploader {
 
 
 
-      const imagePreview = char.image
+            const imagePreview = char.image
 
-        ? `<img src="${URL.createObjectURL(char.image)}" alt="${char.name}预览">`
 
-        : '<div class="jbu-image-placeholder"></div>';
+
+              ? (typeof char.image === 'string'
+
+
+
+                  ? `<img src="${char.image}" alt="${char.name}预览">`
+
+
+
+                  : `<img src="${URL.createObjectURL(char.image)}" alt="${char.name}预览">`)
+
+
+
+              : '<div class="jbu-image-placeholder"></div>';
 
 
 
@@ -1535,23 +1577,33 @@ class JimengBatchUploader {
     const oldCharName = this.characterToReplace;
     if (!oldCharName) return;
 
-    // Remove from imported/tracking list to ensure it disappears from UI if no longer in prompts
-    this.importedPeopleNames = this.importedPeopleNames.filter(name => name !== oldCharName);
+    // Update imported/tracking list (handle objects/strings)
+    const oldImportedIndex = this.importedPeopleNames.findIndex(p => {
+        const pName = (typeof p === 'object' && p.name) ? p.name : String(p);
+        return pName === oldCharName;
+    });
+
+    if (oldImportedIndex !== -1) {
+        // Replace in-place to preserve order. 
+        // Do NOT preserve old URL/Image, as we are changing the character identity.
+        const newEntry = { name: newCharName };
+        this.importedPeopleNames.splice(oldImportedIndex, 1, newEntry);
+    } else {
+        // Ensure new character is tracked
+        this.importedPeopleNames.push({ name: newCharName });
+    }
 
     // Prepare the new character object
     let newCharacterObj = { name: newCharName, image: null };
     
-    // Find the old character in this.characters to get its position and image
+    // Find the old character in this.characters to get its position
     const oldCharIndex = this.characters.findIndex(c => c.name === oldCharName);
 
     if (oldCharIndex !== -1) {
-        // Transfer the image from the old character to the new one
-        newCharacterObj.image = this.characters[oldCharIndex].image;
-        // Replace the old character with the new one at the same position
+        // Replace the old character with the new one at the same position.
+        // Image is reset to null (empty).
         this.characters.splice(oldCharIndex, 1, newCharacterObj);
     } else {
-        // If the old character was not directly in this.characters (e.g., only in importedPeopleNames or prompts)
-        // We add the new character to the end for now, updateCharacters will reconcile
         this.characters.push(newCharacterObj);
     }
 
@@ -2502,141 +2554,115 @@ class JimengBatchUploader {
 
 
   // 上传图片到即梦
-
   async uploadImages(images) {
-
     console.log('开始上传图片，共', images.length, '张');
 
-
-
     if (images.length === 0) {
-
       console.log('没有需要上传的图片，跳过此步骤。');
-
       return;
-
     }
 
+    // Helper to convert base64/URL to File
+    const convertToFile = async (item, index) => {
+        if (item instanceof File) return item;
+        
+        if (typeof item === 'string') {
+            try {
+                // Handle Base64 Data URL
+                if (item.startsWith('data:')) {
+                    const arr = item.split(',');
+                    const mime = arr[0].match(/:(.*?);/)[1];
+                    const bstr = atob(arr[1]);
+                    let n = bstr.length;
+                    const u8arr = new Uint8Array(n);
+                    while (n--) {
+                        u8arr[n] = bstr.charCodeAt(n);
+                    }
+                    return new File([u8arr], `image_${Date.now()}_${index}.png`, { type: mime });
+                } 
+                // Handle Blob URL or regular URL
+                else {
+                    const response = await fetch(item);
+                    const blob = await response.blob();
+                    const mimeType = blob.type || 'image/png';
+                    const ext = mimeType.split('/')[1] || 'png';
+                    return new File([blob], `image_${Date.now()}_${index}.${ext}`, { type: mimeType });
+                }
+            } catch (e) {
+                console.error('Error converting image string to File:', e);
+                return null;
+            }
+        }
+        return null;
+    };
 
+    // Process all images
+    const processedImages = (await Promise.all(images.map((img, i) => convertToFile(img, i)))).filter(img => img !== null);
+
+    if (processedImages.length === 0) {
+         console.warn('有效图片数量为0 (转换失败或输入为空)');
+         return;
+    }
 
     // 等待页面稳定，增加等待时间
-
     await this.sleep(1000);
 
-
-
     // 查找上传区域 - 多次尝试，因为页面可能需要时间加载
-
     const uploadSelectors = [
-
       'input[class*="file-input-"]', // 用户提供的上传input类名
-
       'input[type="file"][accept*="image"]',
-
       'input[type="file"][multiple]',
-
       'input[type="file"]'
-
     ];
-
-
 
     let uploadInput = null;
 
-
-
     // 查找上传input
-
     for (const selector of uploadSelectors) {
-
       const inputs = document.querySelectorAll(selector);
-
       console.log(`查找选择器 ${selector}，找到 ${inputs.length} 个input`);
 
-
-
       if (inputs.length > 0) {
-
         // 文件input通常是隐藏的，直接使用第一个找到的input
-
         uploadInput = inputs[0];
-
         console.log('找到上传input:', selector, uploadInput, 'disabled:', uploadInput.disabled);
-
         break;
-
       }
-
     }
-
-
 
     if (!uploadInput) {
-
       throw new Error('找不到上传区域');
-
     }
 
-
-
     // 模拟文件上传
-
     try {
-
       console.log('准备上传到input:', uploadInput.className || uploadInput.tagName);
 
-
-
       // 完全重置input状态
-
       uploadInput.value = '';
 
-
-
       const dataTransfer = new DataTransfer();
-
-      images.forEach(image => {
-
+      processedImages.forEach(image => {
         dataTransfer.items.add(image);
-
       });
-
-
 
       uploadInput.files = dataTransfer.files;
 
-
-
       // 触发change事件
-
       const changeEvent = new Event('change', { bubbles: true });
-
       uploadInput.dispatchEvent(changeEvent);
 
-
-
       // 也触发input事件
-
       const inputEvent = new Event('input', { bubbles: true });
-
       uploadInput.dispatchEvent(inputEvent);
 
-
-
       console.log('图片上传事件已触发');
-
     } catch (error) {
-
       console.error('上传图片失败:', error);
-
       throw error;
-
     }
 
-
-
     await this.sleep(1000); // 等待上传完成
-
   }
 
 

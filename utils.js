@@ -100,9 +100,18 @@ function extractCharactersFromPrompt(prompt) {
  * @param {Array<string>} additionalNames 额外的角色名称列表（如导入的角色）
  * @returns {Array<object>} 更新后的角色列表
  */
-function updateCharacters(storyboards, existingCharacters, additionalNames = []) {
+function updateCharacters(storyboards, existingCharacters, additionalPeopleData = []) {
   const allPrompts = storyboards.map(s => s.prompt);
-  const characterNames = new Set(additionalNames); // Start with additional names
+  // Start with additional data, mapping to a consistent object structure
+  const characterMap = new Map(); // name -> { name, image (url or File) }
+
+  additionalPeopleData.forEach(p => {
+    if (p.name) {
+      // Prioritize URL from additionalPeopleData if available
+      const charImage = p.url ? p.url : null;
+      characterMap.set(p.name, { name: p.name, image: charImage });
+    }
+  });
 
   // Get all characters from the global database for checking
   let dbCharacters = [];
@@ -115,32 +124,48 @@ function updateCharacters(storyboards, existingCharacters, additionalNames = [])
   allPrompts.forEach(prompt => {
     // 1. Extract using regex patterns
     const extracted = extractCharactersFromPrompt(prompt);
-    extracted.forEach(name => characterNames.add(name));
+    extracted.forEach(name => {
+      if (!characterMap.has(name)) {
+        characterMap.set(name, { name, image: null });
+      }
+    });
 
     // 2. Scan for known characters from database in the prompt
     if (prompt) {
         const lowerPrompt = prompt.toLowerCase();
         dbCharacters.forEach(char => {
-            // Use word boundaries for English names, simple inclusion for potentially Chinese or mixed
-            // Simplified check: if prompt includes the name (case-insensitive)
             if (lowerPrompt.includes(char.name.toLowerCase())) {
-                characterNames.add(char.name);
+                if (!characterMap.has(char.name)) {
+                    // Check if char.url exists in characterDatabase and use it
+                    const charImage = char.url ? char.url : null;
+                    characterMap.set(char.name, { name: char.name, image: charImage });
+                }
             }
         });
     }
   });
 
-  // 更新 this.characters 数组，保留已有图片
-  const newCharacters = [];
-  characterNames.forEach(name => {
-    const existing = existingCharacters.find(c => c.name === name);
+  // Convert map values to array and merge with existing characters, preserving images
+  const newCharacters = Array.from(characterMap.values());
+
+  // Merge with existing characters, preserving existing images if a character already existed
+  newCharacters.forEach(newChar => {
+    const existing = existingCharacters.find(c => c.name === newChar.name);
     if (existing) {
-      newCharacters.push(existing);
-    } else {
-      newCharacters.push({ name, image: null });
+      // Prioritize existing image (from user upload or previous state) over imported default
+      if (existing.image) {
+        newChar.image = existing.image;
+      }
     }
   });
-  
+
+  // Also add any existing characters that are not in the new list (e.g., if they were manually added but not mentioned in current prompts)
+  existingCharacters.forEach(extChar => {
+    if (!newCharacters.some(newChar => newChar.name === extChar.name)) {
+        newCharacters.push(extChar);
+    }
+  });
+
   return newCharacters;
 }
 
