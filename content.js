@@ -13,6 +13,7 @@ class JimengBatchUploader {
     this.floatingWindow = null;
     this.characterToReplace = null; // To store the name of the character being replaced
     this.loadingOverlay = null; // Added for loading overlay
+    this.importedPeopleNames = []; // Store explicitly imported character names
     this.init();
   }
 
@@ -51,9 +52,47 @@ class JimengBatchUploader {
       // if (confirm('是否清空当前列表并导入新数据?')) {
         this.clearStoryboards();
         this.clearVideos();
-        data = JSON.parse(data)
-        if (data && Array.isArray(data)) {
-          data.forEach(item => {
+        this.importedPeopleNames = []; // Reset imported names
+
+        // Parse data if it's a string
+        if (typeof data === 'string') {
+            try {
+                data = JSON.parse(data);
+            } catch (e) {
+                console.error("Failed to parse data as JSON:", e);
+                alert('导入失败：数据格式不正确 (JSON Parse Error)。');
+                return;
+            }
+        }
+
+        let scenes = [];
+        let peoples = [];
+
+        // Determine data structure
+        if (Array.isArray(data)) {
+            // Old structure: data is just the array of scenes
+            scenes = data;
+        } else if (data && typeof data === 'object') {
+            // New structure: { scenes: [...], peoples: [...] }
+            if (Array.isArray(data.scenes)) {
+                scenes = data.scenes;
+            }
+            if (Array.isArray(data.peoples)) {
+                peoples = data.peoples;
+            }
+        }
+
+        // Process Peoples (Characters)
+        if (peoples.length > 0) {
+             this.importedPeopleNames = peoples.map(p => {
+                 // Support both object with name property or simple string
+                 return (typeof p === 'object' && p.name) ? p.name : String(p);
+             }).filter(name => name); // Filter out empty names
+        }
+
+        // Process Scenes (Storyboards/Videos)
+        if (scenes.length > 0) {
+          scenes.forEach(item => {
             if (item.image_prompt) {
               this.addStoryboard(item.image_prompt);
             }
@@ -64,8 +103,13 @@ class JimengBatchUploader {
           this.updateAndRenderCharacters();
           this.renderVideos();
           // alert('数据导入成功！'); // Removed alert as it blocks
+        } else if (peoples.length > 0) {
+           // Case: Only characters imported, no scenes
+           this.updateAndRenderCharacters();
+           this.renderVideos();
         } else {
-          alert('导入失败：数据格式不正确。');
+          // alert('导入失败：数据格式不正确。');
+          console.warn('No valid scenes or peoples found in data.');
         }
       // }
     } finally {
@@ -267,7 +311,7 @@ class JimengBatchUploader {
           </div>
 
           <div class="jbu-character-section">
-            <h3 class="jbu-section-title">角色列表 (自动提取)</h3>
+            <h3 class="jbu-section-title">角色列表 (自动提取/匹配)</h3>
             <div id="jbu-character-list" class="jbu-character-list"></div>
           </div>
 
@@ -286,7 +330,6 @@ class JimengBatchUploader {
 
           <div class="jbu-actions">
             <button class="jbu-btn jbu-start">开始上传</button>
-            <button class="jbu-btn jbu-pause" disabled>暂停</button>
             <button class="jbu-btn jbu-stop" disabled>停止</button>
             <button class="jbu-btn jbu-clear">清空列表</button>
           </div>
@@ -313,7 +356,6 @@ class JimengBatchUploader {
           </div>
            <div class="jbu-actions">
             <button class="jbu-btn jbu-video-start">开始生成视频</button>
-            <button class="jbu-btn jbu-video-pause" disabled>暂停</button>
             <button class="jbu-btn jbu-video-stop" disabled>停止</button>
             <button class="jbu-btn jbu-video-clear">清空列表</button>
           </div>
@@ -464,9 +506,9 @@ class JimengBatchUploader {
     container.querySelector('.jbu-start').addEventListener('click', () => {
       this.startUpload();
     });
-    container.querySelector('.jbu-pause').addEventListener('click', () => {
-      this.pauseUpload();
-    });
+    // container.querySelector('.jbu-pause').addEventListener('click', () => {
+    //   this.pauseUpload();
+    // });
     container.querySelector('.jbu-stop').addEventListener('click', () => {
       this.stopUpload();
     });
@@ -488,9 +530,9 @@ class JimengBatchUploader {
     container.querySelector('.jbu-video-start').addEventListener('click', () => {
       this.startVideoGeneration();
     });
-    container.querySelector('.jbu-video-pause').addEventListener('click', () => {
-      this.pauseUpload();
-    });
+    // container.querySelector('.jbu-video-pause').addEventListener('click', () => {
+    //   this.pauseUpload();
+    // });
     container.querySelector('.jbu-video-stop').addEventListener('click', () => {
       this.stopUpload();
     });
@@ -526,6 +568,7 @@ class JimengBatchUploader {
   // ... (existing image generation functions)
 
   async getCurrentGenerationMode() {
+    await this.clearPreviousContent();
     const promptInputs = document.querySelectorAll('textarea[class*="prompt-textarea-"], input[class*="prompt-input-"]');
     
     for (const input of promptInputs) {
@@ -831,6 +874,7 @@ class JimengBatchUploader {
                     <input type="checkbox" class="jbu-video-checkbox" data-id="${video.id}" ${video.selected ? 'checked' : ''}>
                     <span class="jbu-storyboard-name">${video.name}</span>
                     <span class="jbu-storyboard-status">${this.getStatusText(video.status)}</span>
+                    ${video.status === 'completed' ? `<button class="jbu-regenerate-video" data-id="${video.id}" style="margin-left: 5px; font-size: 12px; padding: 2px 5px; background: #444; color: white; border: 1px solid #666; border-radius: 3px; cursor: pointer;">重新生成</button>` : ''}
                     <button class="jbu-delete-video" data-id="${video.id}">×</button>
                   </div>
                   <div class="jbu-storyboard-content">
@@ -850,6 +894,22 @@ class JimengBatchUploader {
   }
 
   bindVideoEvents() {
+    // 重新生成按钮
+    document.querySelectorAll('.jbu-regenerate-video').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = parseInt(e.target.dataset.id);
+        const video = this.videos.find(v => v.id === id);
+        if (video) {
+          video.status = 'pending';
+          video.selected = true;
+          this.renderVideos();
+          if (!this.isRunning) {
+             this.startVideoGeneration();
+          }
+        }
+      });
+    });
+
     // 添加图片按钮
     document.querySelectorAll('.jbu-add-video-image').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -1044,7 +1104,7 @@ class JimengBatchUploader {
 
   // 从所有分镜中更新角色列表并渲染
   updateAndRenderCharacters() {
-    this.characters = updateCharacters(this.storyboards, this.characters);
+    this.characters = updateCharacters(this.storyboards, this.characters, this.importedPeopleNames);
     this.renderCharacters();
   }
 
@@ -1246,21 +1306,111 @@ class JimengBatchUploader {
 
 
 
-  // 删除角色图片
+    // 删除角色图片
 
-  removeCharacterImage(characterName) {
 
-    const character = this.characters.find(c => c.name === characterName);
 
-    if (character) {
+    removeCharacterImage(characterName) {
 
-      character.image = null;
 
-      this.renderCharacters();
+
+      const character = this.characters.find(c => c.name === characterName);
+
+
+
+      if (character) {
+
+
+
+        character.image = null;
+
+
+
+        this.renderCharacters();
+
+
+
+      }
+
+
 
     }
 
-  }
+
+
+  
+
+
+
+    // 获取提示词中提及的角色
+
+
+
+    _getMentionedCharacters(promptText) {
+
+
+
+      if (!promptText || this.characters.length === 0) {
+
+
+
+        return [];
+
+
+
+      }
+
+
+
+      const mentioned = new Set();
+
+
+
+      const lowerCasePrompt = promptText.toLowerCase();
+
+
+
+  
+
+
+
+      this.characters.forEach(char => {
+
+
+
+        // Use word boundaries to avoid partial matches (e.g., "Luke" matching "Lukewarm")
+
+
+
+        // \b will match at the start/end of a word, or between word characters and non-word characters
+
+
+
+        const regex = new RegExp(`\\b${char.name.toLowerCase()}\\b`, 'g');
+
+
+
+        if (regex.test(lowerCasePrompt)) {
+
+
+
+          mentioned.add(char.name);
+
+
+
+        }
+
+
+
+      });
+
+
+
+      return Array.from(mentioned);
+
+
+
+    }
 
 
 
@@ -1385,6 +1535,25 @@ class JimengBatchUploader {
     const oldCharName = this.characterToReplace;
     if (!oldCharName) return;
 
+    // Remove from imported/tracking list to ensure it disappears from UI if no longer in prompts
+    this.importedPeopleNames = this.importedPeopleNames.filter(name => name !== oldCharName);
+
+    // Prepare the new character object
+    let newCharacterObj = { name: newCharName, image: null };
+    
+    // Find the old character in this.characters to get its position and image
+    const oldCharIndex = this.characters.findIndex(c => c.name === oldCharName);
+
+    if (oldCharIndex !== -1) {
+        // Transfer the image from the old character to the new one
+        newCharacterObj.image = this.characters[oldCharIndex].image;
+        // Replace the old character with the new one at the same position
+        this.characters.splice(oldCharIndex, 1, newCharacterObj);
+    } else {
+        // If the old character was not directly in this.characters (e.g., only in importedPeopleNames or prompts)
+        // We add the new character to the end for now, updateCharacters will reconcile
+        this.characters.push(newCharacterObj);
+    }
 
     const escapedOldCharName = oldCharName.replace(/[-\/\\^$*+?.()|[\\\]{}]/g, '\\$&');
     
@@ -1393,7 +1562,7 @@ class JimengBatchUploader {
     const descRegexPart = '(?:\s*[\(（][^\)）]*[\)）])?'; // Optional description part
     const anyOldCharOccurrenceRegex = new RegExp(escapedOldCharName + descRegexPart, 'g');
 
-    // 2. PERFORM REPLACEMENT
+    // 2. PERFORM REPLACEMENT IN PROMPTS
     const performReplacement = (prompt) => {
       let isFirstMatch = true;
       
@@ -1417,6 +1586,9 @@ class JimengBatchUploader {
 
     // 3. FINALIZE AND RE-RENDER
     this.closeCharacterReplaceModal();
+    // After direct modification, updateAndRenderCharacters will reconcile
+    // The updateCharacters utility will now preserve the position of newCharacterObj
+    // and remove any old characters that are no longer in prompts.
     this.updateAndRenderCharacters();
     this.renderStoryboards();
     this.renderVideos();
@@ -1574,6 +1746,7 @@ class JimengBatchUploader {
             <span class="jbu-storyboard-name">${storyboard.name}</span>
 
             <span class="jbu-storyboard-status">${this.getStatusText(storyboard.status)}</span>
+            ${storyboard.status === 'completed' ? `<button class="jbu-regenerate-storyboard" data-id="${storyboard.id}" style="margin-left: 5px; font-size: 12px; padding: 2px 5px; background: #444; color: white; border: 1px solid #666; border-radius: 3px; cursor: pointer;">重新生成</button>` : ''}
 
             <button class="jbu-delete-storyboard" data-id="${storyboard.id}">×</button>
 
@@ -1623,6 +1796,22 @@ class JimengBatchUploader {
   // 绑定分镜相关事件
 
   bindStoryboardEvents() {
+
+    // 重新生成按钮
+    document.querySelectorAll('.jbu-regenerate-storyboard').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = parseInt(e.target.dataset.id);
+        const storyboard = this.storyboards.find(s => s.id === id);
+        if (storyboard) {
+          storyboard.status = 'pending';
+          storyboard.selected = true;
+          this.renderStoryboards();
+          if (!this.isRunning) {
+             this.startUpload();
+          }
+        }
+      });
+    });
 
     // 删除分镜
 
@@ -2002,21 +2191,19 @@ class JimengBatchUploader {
 
   }
 
-
-
   // 上传单个分镜
 
-  async uploadStoryboard(storyboard) {
+    async uploadStoryboard(storyboard) {
 
-    console.log(`开始上传分镜: ${storyboard.name}`);
+      console.log(`开始上传分镜: ${storyboard.name}`);
 
-    storyboard.status = 'uploading';
+      storyboard.status = 'uploading';
 
-    this.renderStoryboards();
+      this.renderStoryboards();
 
+  
 
-
-    try {
+      try {
 
       // 1. 上传图片 (包括角色参考图和分镜自身的图)
 
@@ -2028,18 +2215,18 @@ class JimengBatchUploader {
 
       // 查找与当前提示词匹配的角色，并添加其参考图
 
-      const mentionedCharacters = extractCharactersFromPrompt(storyboard.prompt);
+      const mentionedCharacters = this._getMentionedCharacters(storyboard.prompt);
 
       mentionedCharacters.forEach(name => {
 
         const character = this.characters.find(c => c.name === name && c.image);
 
         if (character) {
-
-          console.log(`为分镜 ${storyboard.name} 添加角色 ${name} 的参考图`);
-
-          imagesToUpload.push(character.image);
-
+          // 防止重复添加
+          if (!imagesToUpload.includes(character.image)) {
+             console.log(`为分镜 ${storyboard.name} 添加角色 ${name} 的参考图`);
+             imagesToUpload.push(character.image);
+          }
         }
 
       });
@@ -2945,7 +3132,7 @@ class JimengBatchUploader {
 
 
 
-        const pauseBtn = this.floatingWindow.querySelector('.jbu-pause');
+        // const pauseBtn = this.floatingWindow.querySelector('.jbu-pause');
 
 
 
@@ -2953,7 +3140,7 @@ class JimengBatchUploader {
 
 
 
-        if (!startBtn || !pauseBtn || !stopBtn) return;
+        if (!startBtn || !stopBtn) return;
 
   
 
@@ -2961,7 +3148,7 @@ class JimengBatchUploader {
 
 
 
-        pauseBtn.disabled = !this.isRunning;
+        // pauseBtn.disabled = !this.isRunning;
 
 
 
@@ -2969,7 +3156,7 @@ class JimengBatchUploader {
 
 
 
-        pauseBtn.textContent = this.isPaused ? '继续' : '暂停';
+        // pauseBtn.textContent = this.isPaused ? '继续' : '暂停';
 
   
 
@@ -2981,7 +3168,7 @@ class JimengBatchUploader {
 
 
 
-        const pauseBtn = this.floatingWindow.querySelector('.jbu-video-pause');
+        // const pauseBtn = this.floatingWindow.querySelector('.jbu-video-pause');
 
 
 
@@ -2989,7 +3176,7 @@ class JimengBatchUploader {
 
 
 
-        if (!startBtn || !pauseBtn || !stopBtn) return;
+        if (!startBtn || !stopBtn) return;
 
   
 
@@ -2997,7 +3184,7 @@ class JimengBatchUploader {
 
 
 
-        pauseBtn.disabled = !this.isRunning;
+        // pauseBtn.disabled = !this.isRunning;
 
 
 
@@ -3005,7 +3192,7 @@ class JimengBatchUploader {
 
 
 
-        pauseBtn.textContent = this.isPaused ? '继续' : '暂停';
+        // pauseBtn.textContent = this.isPaused ? '继续' : '暂停';
 
 
 

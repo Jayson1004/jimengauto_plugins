@@ -66,16 +66,28 @@ function extractCharactersFromPrompt(prompt) {
   if (!prompt) return [];
 
   const characterNames = new Set();
-  const regex = /(?:角色：)?([\u4e00-\u9fa5a-zA-Z0-9]+?)[(（](.*?)[)）]/g;
+  
+  // 1. Pattern: Name(Description) or 角色：Name(Description)
+  const regexWithParen = /(?:角色：)?([\u4e00-\u9fa5a-zA-Z0-9]+?)[(（](.*?)[)）]/g;
   let match;
-
-  while ((match = regex.exec(prompt)) !== null) {
-    let name = match[1].trim(); // Capture group 1 is the character name
-    // Remove '和' and '*' from the name
+  while ((match = regexWithParen.exec(prompt)) !== null) {
+    let name = match[1].trim();
     name = name.replace(/和|\*/g, '');
     if (name) {
       characterNames.add(name);
     }
+  }
+
+  // 2. Pattern: 角色：Name (without parentheses, followed by newline, space, or end of string)
+  // specific handle for "[主体]角色：Lucas" format
+  const regexRoleColon = /(?:角色|Role)[:：]\s*([\u4e00-\u9fa5a-zA-Z0-9]+)(?:\s|$|\n|\r)/g;
+  while ((match = regexRoleColon.exec(prompt)) !== null) {
+      let name = match[1].trim();
+      name = name.replace(/和|\*/g, '');
+      // Avoid adding if it looks like a common noun or too short if unsure, but for now trust the pattern
+      if (name && !characterNames.has(name)) {
+          characterNames.add(name);
+      }
   }
 
   return Array.from(characterNames);
@@ -85,15 +97,37 @@ function extractCharactersFromPrompt(prompt) {
  * 从所有分镜中更新角色列表
  * @param {Array<object>} storyboards 分镜列表
  * @param {Array<object>} existingCharacters 已有的角色列表
+ * @param {Array<string>} additionalNames 额外的角色名称列表（如导入的角色）
  * @returns {Array<object>} 更新后的角色列表
  */
-function updateCharacters(storyboards, existingCharacters) {
+function updateCharacters(storyboards, existingCharacters, additionalNames = []) {
   const allPrompts = storyboards.map(s => s.prompt);
-  const characterNames = new Set();
+  const characterNames = new Set(additionalNames); // Start with additional names
+
+  // Get all characters from the global database for checking
+  let dbCharacters = [];
+  if (window.characterDatabase) {
+    for (const category in window.characterDatabase) {
+      dbCharacters = dbCharacters.concat(window.characterDatabase[category]);
+    }
+  }
 
   allPrompts.forEach(prompt => {
+    // 1. Extract using regex patterns
     const extracted = extractCharactersFromPrompt(prompt);
     extracted.forEach(name => characterNames.add(name));
+
+    // 2. Scan for known characters from database in the prompt
+    if (prompt) {
+        const lowerPrompt = prompt.toLowerCase();
+        dbCharacters.forEach(char => {
+            // Use word boundaries for English names, simple inclusion for potentially Chinese or mixed
+            // Simplified check: if prompt includes the name (case-insensitive)
+            if (lowerPrompt.includes(char.name.toLowerCase())) {
+                characterNames.add(char.name);
+            }
+        });
+    }
   });
 
   // 更新 this.characters 数组，保留已有图片

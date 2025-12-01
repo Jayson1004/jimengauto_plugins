@@ -27,7 +27,7 @@
           "run_at": "document_end"
         },
         {
-          "matches": ["http://localhost:5173/*"],
+          "matches": ["http://localhost:*/*"],
           "js": ["localhost_content.js"],
           "run_at": "document_end"
         }

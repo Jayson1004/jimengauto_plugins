@@ -122,7 +122,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         // Reuse the existing function to forward data to the jimeng tab
         forwardDataToContentScript(request.payload);
         sendResponse({ status: 'success', message: 'Data forwarded to jimeng tab.' });
-        return true; // Indicates an asynchronous response
+        return; // Response sent synchronously, so we do not return true
     }
     if (request.action === 'getSettings') {
         chrome.storage.sync.get(['uploadInterval', 'autoStart'], (result) => {

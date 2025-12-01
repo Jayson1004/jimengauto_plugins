@@ -81,7 +81,7 @@
 .jbu-controls {
   display: flex;
   gap: 8px;
-  margin-bottom: 16px;
+  margin-bottom: 6px;
 }
 
 .jbu-btn {
@@ -147,7 +147,7 @@
 .jbu-settings {
   display: flex;
   gap: 15px;
-  margin-bottom: 16px;
+  margin-bottom: 6px;
   padding: 12px;
   background: #2a2a2a;
   border-radius: 4px;
@@ -367,12 +367,12 @@
 
 /* 操作按钮 */
 .jbu-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+    display: flex;
   gap: 8px;
 }
 
 .jbu-actions .jbu-btn {
+  flex: 1;
   font-size: 11px;
 }
 
@@ -489,8 +489,8 @@
 
 /* ---- 角色列表样式 ---- */
 .jbu-character-section {
-  margin-bottom: 16px;
-  padding: 12px;
+  margin-bottom: 6px;
+  padding: 6px;
   background: #2a2a2a;
   border-radius: 4px;
 }
@@ -500,7 +500,6 @@
   font-weight: 600;
   color: #00d4ff;
   margin: 0 0 12px 0;
-  padding-bottom: 8px;
   border-bottom: 1px solid #444;
 }
 
@@ -508,8 +507,8 @@
   display: flex;
   flex-wrap: nowrap;
   overflow-x: scroll; /* Always show scrollbar to indicate scrollability */
-  gap: 12px;
-  padding-bottom: 12px; /* Make space for the scrollbar */
+  gap: 6px;
+  padding-bottom: 2px; /* Make space for the scrollbar */
   cursor: grab; /* Indicate drag-to-scroll is available */
 }
 
